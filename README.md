@@ -2,7 +2,7 @@
 
 A responsive, premium custom-product storefront and the foundation for Inkivo's versioned product-personalisation platform.
 
-**Current launch status:** the real Supabase database and first administrator were configured on 30 September 2026. Application credentials, GitHub upload, catalogue publishing and deployed end-to-end verification remain outstanding. See [deployment instructions and current status](docs/deployment-2026-09-30.md). Earlier audit documents describe historical checkpoints.
+**Current launch status:** the real Supabase database and first administrator were configured on 30 September 2026. The application was uploaded to GitHub, and Vercel's Next.js framework, install command and public Production addresses were configured. Supabase API credentials, catalogue publishing and deployed end-to-end verification remain outstanding. See [deployment instructions and current status](docs/deployment-2026-09-30.md). Earlier audit documents describe historical checkpoints.
 
 ## Included
 

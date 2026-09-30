@@ -11,8 +11,10 @@ Updated 30 September 2026. Database setup is complete; the application is not ye
 - All 15 application tables have row-level security enabled. Anonymous catalogue-edit execution and authenticated access to the server-only rate-limit function are blocked.
 - `product-assets` is public for product imagery; `order-assets` is private for customer artwork.
 - Products and orders are empty. No catalogue publishing, live order submission or WhatsApp message has been performed.
-- Vercel project `inkivoprint-4522/project1` is linked to GitHub `inkivoprint-ux/project1`. Its current “Ready” deployment is initial commit `9057527`, containing only a README, not the application.
-- Local Git was initialized with permission and connected to the repository's existing history without replacing project files. Upload remains incomplete because previously saved Git credentials lacked write access.
+- Vercel project `inkivoprint-4522/project1` is linked to GitHub `inkivoprint-ux/project1`. Next.js is now the saved framework, with `npm ci` installation and Node.js 24.x; the repository root is unchanged. The previous initial deployment contained only a README. A configured application deployment still needs verification.
+- Local Git was initialized with permission and connected to the repository's existing history without replacing project files. The owner authorized GitHub sign-in as `inkivoprint-ux`, and application commit `3f79b0d` was pushed normally to `main`. Unrelated saved accounts and repository history were preserved.
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SITE_URL` were saved in Vercel for Production. Supabase API keys have not been entered; no secret was committed or shown in chat. Redeployment is required after adding the keys.
+- Vercel lists application commit `3f79b0d` as Ready, but the existing production address returned Vercel `404 NOT_FOUND` during inspection. This first build preceded the corrected framework/public settings; dashboard Ready alone is not proof of a working storefront. Verify the domain mapping and a fresh Next.js deployment after credentials are added.
 
 ## Connection values for Vercel
 
@@ -40,6 +42,8 @@ Set Production values before the application build. Prefer a separate staging Su
 These files are in `supabase/migrations`. **Do not rerun initial setup or reset this project.** They were applied manually, not registered through CLI migration history; reconcile history before CLI push. Future changes should be additive migrations after inspecting current state. The profile trigger/backfill creates customer profiles; only the approved account was promoted. Do not disable RLS or make customer storage public to fix errors.
 
 ## GitHub upload and Vercel deployment
+
+The initial application upload and framework configuration below are complete. Remaining work starts with the API-key entries and a fresh deployment; do not reinitialize Git or replace existing history.
 
 1. Authenticate local Git as the Inkivo account with write access to `inkivoprint-ux/project1`. Chrome sign-in does not change saved Git credentials. Preserve unrelated saved accounts.
 2. Review the upload list: include code, public product/font assets, migrations, package lock and docs. Exclude environment secrets, `node_modules`, `.next`, logs and build caches.
