@@ -2,7 +2,8 @@ import type { SurfaceType } from "./customization";
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-export function surfaceCurveAngle(surface: SurfaceType, curvature: number, precisionWrap: boolean, wrapAngle: number) {
+export function surfaceCurveAngle(surface: SurfaceType, curvature: number, precisionWrap: boolean, wrapAngle: number, intensity?: number) {
+  if (intensity !== undefined) return clamp(wrapAngle, 0, 170) * Math.PI / 360 * clamp(intensity, 0, 1);
   const cylindrical = surface === "cylinder" || surface === "tapered-cylinder";
   if (precisionWrap && cylindrical) return clamp(wrapAngle, 30, 170) * Math.PI / 360;
   const curve = clamp(curvature, 0, 100) / 100;

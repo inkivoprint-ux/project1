@@ -38,3 +38,18 @@ describe("custom mask surface geometry", () => {
     expect(surfaceRowScale("custom-mask", 500, 0)).toBeCloseTo(0.92);
   });
 });
+
+describe("text cylinder intensity", () => {
+  it("has identity geometry at zero intensity and horizontal curvature", () => {
+    expect(surfaceCurveAngle("cylinder", 72, true, 140, 0)).toBe(0);
+    expect(surfaceCurveAngle("cylinder", 72, true, 0, 1)).toBe(0);
+    expect(curvedSourcePosition(0.5, 0)).toBe(0.5);
+  });
+  it("increases wrapping continuously without changing legacy image geometry", () => {
+    const gentle = surfaceCurveAngle("cylinder", 72, true, 140, 0.25);
+    const strong = surfaceCurveAngle("cylinder", 72, true, 140, 1);
+    expect(strong).toBeCloseTo(gentle * 4);
+    expect(curvedSourcePosition(0.5, strong)).toBeLessThan(curvedSourcePosition(0.5, gentle));
+    expect(surfaceCurveAngle("cylinder", 72, true, 0)).toBeCloseTo(30 * Math.PI / 360);
+  });
+});

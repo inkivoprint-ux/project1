@@ -27,6 +27,8 @@ type Props = {
   fabricBlendStrength?: number;
   fabricTextureStrength?: number;
   surfaceShading?: boolean;
+  deformationIntensity?: number;
+  verticalDeformation?: number;
   artworkOpacity?: number;
   onRenderStateChange?: (state: "rendering" | "ready" | "error") => void;
   scale?: number;
@@ -42,10 +44,12 @@ export function WarpedArtwork({
   src, curvature, perspective, taper, opacity, blendMode, maskRadius, maskShape = "rectangle", maskPoints = EMPTY_MASK_POINTS, surface,
   precisionWrap = false, wrapAngle = 110, edgeFade = 0, surfaceMap,
   displacementStrength = 55, fabricBlendStrength = 48, fabricTextureStrength = 18,
+  deformationIntensity, verticalDeformation,
   surfaceShading = true, artworkOpacity = 1, onRenderStateChange,
   scale = 1, imageRotation = 0, offsetX = 0, offsetY = 0,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageCache = useRef(new Map<string, Promise<HTMLImageElement>>());
   const [renderSize, setRenderSize] = useState({ width: 560, height: 560 });
 
   useEffect(() => {
@@ -77,9 +81,20 @@ export function WarpedArtwork({
     if (!src) return;
     let cancelled = false;
 
+    const cachedImage = (url: string) => {
+      let pending = imageCache.current.get(url);
+      if (!pending) {
+        pending = loadCanvasImage(url);
+        imageCache.current.set(url, pending);
+        pending.catch(() => imageCache.current.delete(url));
+      }
+      return pending;
+    };
+    // Keep only this layer's source and map, avoiding repeated image decoding on slider input.
+    for (const key of imageCache.current.keys()) if (key !== src && key !== surfaceMap) imageCache.current.delete(key);
     Promise.all([
-      loadCanvasImage(src),
-      surface === "fabric" && surfaceMap ? loadCanvasImage(surfaceMap).catch(() => null) : Promise.resolve(null),
+      cachedImage(src),
+      surface === "fabric" && surfaceMap ? cachedImage(surfaceMap).catch(() => null) : Promise.resolve(null),
     ]).then(([image, mapImage]) => {
       if (cancelled) return;
       const work = document.createElement("canvas");
@@ -102,10 +117,10 @@ export function WarpedArtwork({
 
       if (surface === "flat") context.drawImage(work, 0, 0);
       else if (surface === "fabric") {
-        if (mapImage) renderMappedFabric(context, work, mapImage, width, height, displacementStrength, fabricBlendStrength);
-        else renderProceduralFabric(context, work, width, height, curvature, fabricBlendStrength);
+        if (mapImage) renderMappedFabric(context, work, mapImage, width, height, displacementStrength, fabricBlendStrength, deformationIntensity);
+        else renderProceduralFabric(context, work, width, height, curvature, fabricBlendStrength, deformationIntensity);
         applyFabricTexture(context, width, height, fabricTextureStrength);
-      } else renderCurvedSurface(context, work, width, height, surface, curvature, taper, precisionWrap, wrapAngle, edgeFade);
+      } else renderCurvedSurface(context, work, width, height, surface, curvature, taper, precisionWrap, wrapAngle, edgeFade, deformationIntensity, verticalDeformation);
 
       if (surface !== "fabric" && surfaceShading) applySurfaceShade(context, width, height, curvature);
       // Masks, perspective and opacity must be pixels, not preview-only CSS.
@@ -115,14 +130,14 @@ export function WarpedArtwork({
       if (!cancelled) { context.clearRect(0, 0, width, height); onRenderStateChange?.("error"); }
     });
     return () => { cancelled = true; };
-  }, [src, curvature, taper, scale, imageRotation, offsetX, offsetY, surface, precisionWrap, wrapAngle, edgeFade, surfaceMap, displacementStrength, fabricBlendStrength, fabricTextureStrength, surfaceShading, artworkOpacity, opacity, perspective, maskRadius, maskShape, maskPoints, onRenderStateChange, renderSize]);
+  }, [src, curvature, taper, scale, imageRotation, offsetX, offsetY, surface, precisionWrap, wrapAngle, edgeFade, surfaceMap, displacementStrength, fabricBlendStrength, fabricTextureStrength, surfaceShading, deformationIntensity, verticalDeformation, artworkOpacity, opacity, perspective, maskRadius, maskShape, maskPoints, onRenderStateChange, renderSize]);
 
   // Blend the enclosing positioned layer against the photograph, not inside an
   // isolated stacking context. Exports use the same mode from this metadata.
   return <canvas ref={canvasRef} className="warped-artwork" aria-label="Warped artwork preview" data-blend-mode={blendMode} />;
 }
 
-function renderMappedFabric(context: CanvasRenderingContext2D, work: HTMLCanvasElement, mapImage: HTMLImageElement, width: number, height: number, displacementStrength: number, fabricBlendStrength: number) {
+function renderMappedFabric(context: CanvasRenderingContext2D, work: HTMLCanvasElement, mapImage: HTMLImageElement, width: number, height: number, displacementStrength: number, fabricBlendStrength: number, deformationIntensity?: number) {
   const sourceContext = work.getContext("2d", { willReadFrequently: true });
   const mapCanvas = document.createElement("canvas");
   mapCanvas.width = width;
@@ -139,7 +154,7 @@ function renderMappedFabric(context: CanvasRenderingContext2D, work: HTMLCanvasE
   const shadowMask = context.createImageData(width, height);
   const highlightMask = context.createImageData(width, height);
   const resolutionScale = Math.min(width, height) / 560;
-  const strength = (2 + (clamp(displacementStrength, 0, 100) / 100) * 18) * resolutionScale;
+  const strength = (deformationIntensity === undefined ? 2 + clamp(displacementStrength, 0, 100) / 100 * 18 : clamp(displacementStrength, 0, 100) / 100 * 20) * resolutionScale;
   const luminanceAt = (x: number, y: number) => {
     const index = (clamp(y, 0, height - 1) * width + clamp(x, 0, width - 1)) * 4;
     return map.data[index] * 0.299 + map.data[index + 1] * 0.587 + map.data[index + 2] * 0.114;
@@ -159,7 +174,7 @@ function renderMappedFabric(context: CanvasRenderingContext2D, work: HTMLCanvasE
       const tx = sourceX - x0;
       const ty = sourceY - y0;
       const targetIndex = (y * width + x) * 4;
-      const shade = clamp(0.96 + ((luminance - 128) / 128) * 0.08 + (gradientX - gradientY) * 0.04, 0.88, 1.1);
+      const shade = 1 + (clamp(0.96 + ((luminance - 128) / 128) * 0.08 + (gradientX - gradientY) * 0.04, 0.88, 1.1) - 1) * (deformationIntensity === undefined ? 1 : clamp(fabricBlendStrength, 0, 100) / 100);
       for (let channel = 0; channel < 4; channel += 1) {
         const top = source.data[(y0 * width + x0) * 4 + channel] * (1 - tx) + source.data[(y0 * width + x1) * 4 + channel] * tx;
         const bottom = source.data[(y1 * width + x0) * 4 + channel] * (1 - tx) + source.data[(y1 * width + x1) * 4 + channel] * tx;
@@ -182,8 +197,8 @@ function renderMappedFabric(context: CanvasRenderingContext2D, work: HTMLCanvasE
   applyFabricLighting(context, shadowMask, highlightMask, width, height, fabricBlendStrength);
 }
 
-function renderProceduralFabric(context: CanvasRenderingContext2D, work: HTMLCanvasElement, width: number, height: number, curvature: number, fabricBlendStrength: number) {
-  const wrinkleStrength = (3 + (curvature / 100) * 15) * (Math.min(width, height) / 560);
+function renderProceduralFabric(context: CanvasRenderingContext2D, work: HTMLCanvasElement, width: number, height: number, curvature: number, fabricBlendStrength: number, deformationIntensity?: number) {
+  const wrinkleStrength = (deformationIntensity === undefined ? 3 + curvature / 100 * 15 : clamp(curvature, 0, 100) / 100 * 18) * (Math.min(width, height) / 560);
   const rowStep = Math.max(1, Math.round(height / 420));
   for (let destinationY = 0; destinationY < height; destinationY += rowStep) {
     const vertical = destinationY / height;
@@ -191,7 +206,7 @@ function renderProceduralFabric(context: CanvasRenderingContext2D, work: HTMLCan
     context.drawImage(work, 0, destinationY, width, rowStep + 1, displacement, destinationY, width - Math.abs(displacement) * 0.6, rowStep + 1);
   }
   context.globalCompositeOperation = "source-atop";
-  context.globalAlpha = 0.35 + (clamp(fabricBlendStrength, 0, 100) / 100) * 0.65;
+  context.globalAlpha = deformationIntensity === undefined ? 0.35 + clamp(fabricBlendStrength, 0, 100) / 100 * 0.65 : clamp(fabricBlendStrength, 0, 100) / 100;
   const light = context.createLinearGradient(0, 0, width, height);
   light.addColorStop(0, "rgba(255,255,255,0.11)");
   light.addColorStop(0.28, "rgba(0,0,0,0.09)");
@@ -234,10 +249,11 @@ function applyFabricTexture(context: CanvasRenderingContext2D, width: number, he
   context.globalCompositeOperation = "source-over";
 }
 
-function renderCurvedSurface(context: CanvasRenderingContext2D, work: HTMLCanvasElement, width: number, height: number, surface: SurfaceType, curvature: number, taper: number, precisionWrap: boolean, wrapAngle: number, edgeFade: number) {
+function renderCurvedSurface(context: CanvasRenderingContext2D, work: HTMLCanvasElement, width: number, height: number, surface: SurfaceType, curvature: number, taper: number, precisionWrap: boolean, wrapAngle: number, edgeFade: number, deformationIntensity?: number, verticalDeformation?: number) {
   const curve = clamp(curvature, 0, 100) / 100;
   const cylindrical = surface === "cylinder" || surface === "tapered-cylinder";
-  const maxAngle = surfaceCurveAngle(surface, curvature, precisionWrap, wrapAngle);
+  const amount = deformationIntensity === undefined ? 1 : clamp(deformationIntensity, 0, 1);
+  const maxAngle = surfaceCurveAngle(surface, curvature, precisionWrap, wrapAngle, deformationIntensity);
   const mapped = document.createElement("canvas");
   mapped.width = width;
   mapped.height = height;
@@ -245,13 +261,14 @@ function renderCurvedSurface(context: CanvasRenderingContext2D, work: HTMLCanvas
   if (!mappedContext) return;
   enableHighQuality(mappedContext);
   const columnStep = Math.max(1, Math.round(width / 420));
-  if (maxAngle === 0) mappedContext.drawImage(work, 0, 0);
+  if (maxAngle === 0 && !verticalDeformation) mappedContext.drawImage(work, 0, 0);
   else for (let destinationX = 0; destinationX < width; destinationX += columnStep) {
     const normalized = (destinationX / width) * 2 - 1;
     const sourceNormalized = curvedSourcePosition(normalized, maxAngle);
     const sourceX = ((sourceNormalized + 1) / 2) * width;
     const edge = Math.abs(normalized);
-    const bow = (precisionWrap && cylindrical ? maxAngle / 1.35 : curve) * edge * edge * 19 * (height / 560);
+    const bowStrength = verticalDeformation === undefined ? (precisionWrap && cylindrical ? maxAngle / 1.35 : curve) : clamp(verticalDeformation, 0, 100) / 100 * 2;
+    const bow = bowStrength * edge * edge * 19 * (height / 560);
     mappedContext.drawImage(work, sourceX, 0, columnStep + 1, height, destinationX, bow, columnStep + 1, height - bow * 2);
   }
   if ((surface === "tapered-cylinder" || surface === "custom-mask") && taper !== 0) {
@@ -269,8 +286,8 @@ function renderCurvedSurface(context: CanvasRenderingContext2D, work: HTMLCanvas
     const ratio = Math.min(1, maxAngle / (Math.PI / 2));
     light.addColorStop(0, `rgba(0,0,0,${0.42 * ratio})`);
     light.addColorStop(0.2, `rgba(0,0,0,${0.13 * ratio})`);
-    light.addColorStop(0.46, "rgba(255,255,255,0.11)");
-    light.addColorStop(0.62, "rgba(255,255,255,0.03)");
+    light.addColorStop(0.46, `rgba(255,255,255,${0.11 * amount})`);
+    light.addColorStop(0.62, `rgba(255,255,255,${0.03 * amount})`);
     light.addColorStop(0.82, `rgba(0,0,0,${0.12 * ratio})`);
     light.addColorStop(1, `rgba(0,0,0,${0.44 * ratio})`);
     context.fillStyle = light;

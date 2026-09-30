@@ -155,7 +155,7 @@ export async function analyseMockupImage(src: string, surface: SurfaceType, stag
 
 export async function generateSurfaceMap(
   src: string,
-  area: Pick<TemplateArea, "x" | "y" | "width" | "height">,
+  area: Pick<TemplateArea, "x" | "y" | "width" | "height"> & { rotation?: number },
   suppliedWidth?: number,
   suppliedHeight?: number,
   stagePadding = 12,
@@ -187,7 +187,15 @@ export async function generateSurfaceMap(
   if (!context) throw new Error("Surface-map generation is unavailable in this browser.");
   context.fillStyle = "rgb(128,128,128)";
   context.fillRect(0, 0, size, size);
-  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, size, size);
+  if (area.rotation) {
+    context.save();
+    context.scale(size / Math.max(1, areaWidth), size / Math.max(1, areaHeight));
+    context.translate(areaWidth / 2, areaHeight / 2);
+    context.rotate(-area.rotation * Math.PI / 180);
+    context.translate(-areaLeft - areaWidth / 2, -areaTop - areaHeight / 2);
+    context.drawImage(image, imageLeft, imageTop, renderedWidth, renderedHeight);
+    context.restore();
+  } else context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, size, size);
   const pixels = context.getImageData(0, 0, size, size);
   let total = 0;
   let samples = 0;

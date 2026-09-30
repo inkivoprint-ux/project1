@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import localFont from "next/font/local";
-import { ArrowLeft, Check, Eye, EyeOff, Focus, ImagePlus, RotateCcw, ShoppingBag, Sparkles, Trash2, Type, Upload, ZoomIn } from "lucide-react";
+import { ArrowLeft, Check, Eye, EyeOff, ImagePlus, RotateCcw, ShoppingBag, Sparkles, Trash2, Type, Upload, ZoomIn } from "lucide-react";
 import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { formatPrice, Product } from "@/lib/products";
 import { addCartEntries, type CartEntry } from "@/lib/cart";
@@ -14,7 +14,7 @@ import { hasSupabaseConfiguration } from "@/lib/supabase/config";
 import { refreshSharedTemplate } from "@/lib/sharedCatalog";
 import { estimatedPrintDpi } from "@/lib/renderQuality";
 import { generateSurfaceMap } from "@/lib/smartMockup";
-import { getTextStyle, getTextSurfaceOverrides, type TextFont, type TextSurface } from "@/lib/textCustomization";
+import { DEFAULT_TEXT_DEFORMATION, getTextStyle, getTextSurfaceOverrides, type TextFont, type TextSurface } from "@/lib/textCustomization";
 import { BrandLogo } from "./BrandLogo";
 import { WarpedArtwork } from "./WarpedArtwork";
 import { canvasBlendOperation } from "@/lib/artworkBlend";
@@ -56,6 +56,9 @@ export function Customizer({ product }: { product: Product }) {
   const [font, setFont] = useState<TextFont>("classic");
   const [textOpacity, setTextOpacity] = useState(100);
   const [textSurface, setTextSurface] = useState<TextSurface>("product");
+  const [textDeformation, setTextDeformation] = useState({ ...DEFAULT_TEXT_DEFORMATION });
+  const [textWrinkleMap, setTextWrinkleMap] = useState<{ key: string; map: string } | null>(null);
+  const [textMapError, setTextMapError] = useState(false);
   const [textBold, setTextBold] = useState<boolean | null>(null);
   const [textItalic, setTextItalic] = useState<boolean | null>(null);
   const [textRenderState, setTextRenderState] = useState<"rendering" | "ready" | "error">("rendering");
@@ -81,7 +84,6 @@ export function Customizer({ product }: { product: Product }) {
   const [template, setTemplate] = useState(() => createDefaultTemplate(product));
   const [templateReady, setTemplateReady] = useState(!hasSupabaseConfiguration());
   const [loadedMockup, setLoadedMockup] = useState("");
-  const [automaticSurfaceMap, setAutomaticSurfaceMap] = useState<string | undefined>();
   const fileRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const artworkRef = useRef<HTMLDivElement>(null);
@@ -128,26 +130,33 @@ export function Customizer({ product }: { product: Product }) {
   const area = view === "back" ? template.backArea ?? template.area : template.area;
   const productView = product.views?.find((item) => item.id === view) ?? { id: "front", label: "Front", image: product.image };
   const mockupSrc = template.mockupImages?.[view] ?? productView.image;
-  const surfaceMap = area.surfaceMap ?? automaticSurfaceMap;
+  const surfaceMap = area.surfaceMap;
   const hasDesign = Boolean((template.tools.images && imageUrl) || (template.tools.text && textArtwork));
   const imageSizingEnabled = template.tools.allowScale || template.tools.allowCrop;
   const imagePrintDpi = imageMeta ? estimatedPrintDpi(imageMeta.width, imageMeta.height, area.widthMm, area.heightMm) : null;
   const effectiveActiveLayer: ActiveLayer = activeLayer === "image" && !template.tools.images && template.tools.text ? "text" : activeLayer === "text" && !template.tools.text && template.tools.images ? "image" : activeLayer;
-  const designSignature = JSON.stringify([product.id, product.price, view, imageUrl, imageScale, imageRotation, imageX, imageY, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textStyle.weight, textStyle.italic, template]);
+  const designSignature = JSON.stringify([product.id, product.price, view, imageUrl, imageScale, imageRotation, imageX, imageY, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textWrinkleMap?.key, textStyle.weight, textStyle.italic, template]);
   const cartSignature = `${designSignature}:${isTShirt ? serializeSizeQuantities(sizeQuantities) : quantity}`;
   const added = savedDesignSignature === cartSignature;
 
+  // Build only when the user selects wrinkles; never change the image layer or template.
+  const textMapKey = JSON.stringify([mockupSrc, area.x, area.y, area.width, area.height, area.rotation]);
+  const needsTextMap = Boolean(text.trim()) && textSurface === "wrinkled" && !area.surfaceMap;
   useEffect(() => {
-    if (area.surface !== "fabric" || area.surfaceMap || !stageRef.current) {
-      setAutomaticSurfaceMap(undefined);
-      return;
-    }
+    if (!needsTextMap || loadedMockup !== mockupSrc || textWrinkleMap?.key === textMapKey) return;
     let cancelled = false;
-    generateSurfaceMap(mockupSrc, area)
-      .then((map) => { if (!cancelled) setAutomaticSurfaceMap(map); })
-      .catch(() => { if (!cancelled) setAutomaticSurfaceMap(undefined); });
-    return () => { cancelled = true; };
-  }, [mockupSrc, area]);
+    const frame = requestAnimationFrame(() => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      setTextMapError(false);
+      const image = stage.querySelector("img");
+      const padding = image ? parseFloat(getComputedStyle(image).paddingLeft) || 0 : 0;
+      generateSurfaceMap(mockupSrc, area, stage.clientWidth, stage.clientHeight, padding)
+        .then((map) => { if (!cancelled) setTextWrinkleMap({ key: textMapKey, map }); })
+        .catch(() => { if (!cancelled) setTextMapError(true); });
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [needsTextMap, loadedMockup, mockupSrc, area, textMapKey, textWrinkleMap?.key]);
 
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -160,30 +169,17 @@ export function Customizer({ product }: { product: Product }) {
     setOriginalFile(file);
     setImageMeta(null);
     readImageDimensions(nextUrl).then(setImageMeta).catch(() => setImageMeta(null));
-    autoFitImage();
-    setMessage("Photo fitted automatically. Drag it directly on the product for manual positioning.");
+    setMessage("Photo loaded. Use the placement controls or drag it on the product.");
     setActiveLayer("image");
     setShowBoundary(false);
     event.target.value = "";
   }
 
-  function autoFitImage() {
+  function resetImagePlacement() {
     setImageScale(area.defaultArtworkScale ?? 1);
     setImageRotation(area.defaultArtworkRotation ?? 0);
     setImageX(area.defaultArtworkOffsetX ?? 0);
     setImageY(area.defaultArtworkOffsetY ?? 0);
-  }
-
-  function fillPrintArea() {
-    setImageScale(1.35);
-    setImageRotation(0);
-    setImageX(0);
-    setImageY(0);
-  }
-
-  function centerActiveLayer() {
-    if (effectiveActiveLayer === "image") { setImageX(0); setImageY(0); }
-    else { setTextX(0); setTextY(0); }
   }
 
   function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
@@ -205,9 +201,12 @@ export function Customizer({ product }: { product: Product }) {
     const drag = dragRef.current;
     const artwork = artworkRef.current;
     if (!drag || !artwork) return;
-    const bounds = artwork.getBoundingClientRect();
-    const nextX = clamp(drag.originX + ((event.clientX - drag.pointerX) / Math.max(1, bounds.width)) * 300, -120, 120);
-    const nextY = clamp(drag.originY + ((event.clientY - drag.pointerY) / Math.max(1, bounds.height)) * 300, -120, 120);
+    const unit = Math.max(1, Math.min(artwork.offsetWidth, artwork.offsetHeight)) / 300;
+    const radians = area.rotation * Math.PI / 180;
+    const dx = event.clientX - drag.pointerX;
+    const dy = event.clientY - drag.pointerY;
+    const nextX = clamp(drag.originX + (dx * Math.cos(radians) + dy * Math.sin(radians)) / unit, -artwork.offsetWidth / unit / 2, artwork.offsetWidth / unit / 2);
+    const nextY = clamp(drag.originY + (-dx * Math.sin(radians) + dy * Math.cos(radians)) / unit, -artwork.offsetHeight / unit / 2, artwork.offsetHeight / unit / 2);
     if (drag.layer === "image") { setImageX(Math.round(nextX)); setImageY(Math.round(nextY)); }
     else { setTextX(Math.round(nextX)); setTextY(Math.round(nextY)); }
   }
@@ -219,7 +218,7 @@ export function Customizer({ product }: { product: Product }) {
     setImageUrl(null);
     setImageMeta(null);
     setOriginalFile(null);
-    autoFitImage();
+    resetImagePlacement();
     setText("");
     setTextSize(28);
     setTextColor("#ffffff");
@@ -229,6 +228,7 @@ export function Customizer({ product }: { product: Product }) {
     setFont("classic");
     setTextOpacity(100);
     setTextSurface("product");
+    setTextDeformation({ ...DEFAULT_TEXT_DEFORMATION });
     setTextBold(null);
     setTextItalic(null);
     setSavedDesignSignature(null);
@@ -280,7 +280,7 @@ export function Customizer({ product }: { product: Product }) {
           productId: product.id,
           createdAt: new Date().toISOString(),
           assets,
-          configuration: { view, imageScale, imageRotation, imageX, imageY, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textBold: textStyle.weight >= 600, textItalic: textStyle.italic, textFontWeight: textStyle.weight, templateId: template.id, templateVersion: template.version, templateSnapshot: { ...template, area, backArea: undefined, mockupImages: undefined } },
+          configuration: { view, imageScale, imageRotation, imageX, imageY, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textBold: textStyle.weight >= 600, textItalic: textStyle.italic, textFontWeight: textStyle.weight, templateId: template.id, templateVersion: template.version, templateSnapshot: { ...template, area, backArea: undefined, mockupImages: undefined } },
         });
         preparedDesignRef.current = { signature: designSignature, id: designId };
       }
@@ -319,7 +319,7 @@ export function Customizer({ product }: { product: Product }) {
     fabricBlendStrength: area.fabricBlendStrength,
     fabricTextureStrength: area.fabricTextureStrength,
   } as const;
-  const textMappedProps = { ...mappedProps, ...getTextSurfaceOverrides(textSurface, { ...area, surfaceMap }) };
+  const textMappedProps = { ...mappedProps, ...getTextSurfaceOverrides(textSurface, { ...area, surfaceMap: surfaceMap ?? (textWrinkleMap?.key === textMapKey ? textWrinkleMap.map : undefined) }, textDeformation) };
 
   return (
     <main className="customizer-shell">
@@ -352,7 +352,7 @@ export function Customizer({ product }: { product: Product }) {
             </div>
             {(showBoundary || !hasDesign) && <div className="print-boundary" style={{ left: `${area.x}%`, top: `${area.y}%`, width: `${area.width}%`, height: `${area.height}%`, transform: `rotate(${area.rotation}deg)` }} aria-hidden="true"><i style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} /><span>PRINT AREA</span></div>}
           </MockupStage>
-          <div className="live-preview-status"><span><Sparkles size={13} /> {area.surface === "fabric" ? surfaceMap ? "Photoshop-style fabric mapping active" : "Preparing wrinkle map…" : area.precisionWrap ? "Live cylindrical wrap active" : "Live surface mapping active"}</span><span>{template.tools.allowMove ? "Drag the selected layer directly on the product" : "Layer position is locked by this product template"}</span></div>
+          <div className="live-preview-status"><span><Sparkles size={13} /> {area.surface === "fabric" ? surfaceMap ? "Photoshop-style fabric mapping active" : "Manual fabric mapping" : area.precisionWrap ? "Live cylindrical wrap active" : "Live surface mapping active"}</span><span>{template.tools.allowMove ? "Drag the selected layer directly on the product" : "Layer position is locked by this product template"}</span></div>
         </section>
 
         <aside className="customizer-panel">
@@ -373,7 +373,6 @@ export function Customizer({ product }: { product: Product }) {
               <button className={`upload-zone ${imageUrl ? "compact" : ""}`} onClick={() => fileRef.current?.click()}><span><Upload /></span><strong>{imageUrl ? "Replace photo" : "Upload a photo"}</strong><small>JPG, PNG or WEBP · up to 15 MB</small></button>
               {imageUrl && <>
                 {imageMeta && <div className={`upload-quality ${imagePrintDpi !== null && imagePrintDpi < 150 ? "warning" : ""}`}><Check size={14} /><div><strong>Original image preserved</strong><small>{imageMeta.width} × {imageMeta.height} px · approximately {imagePrintDpi} DPI at this print size</small></div></div>}
-                <div className="auto-adjust-actions"><button onClick={autoFitImage}><Sparkles size={14} /> Auto fit</button>{imageSizingEnabled && <button onClick={fillPrintArea}><ZoomIn size={14} /> Fill area</button>}{template.tools.allowMove && <button onClick={centerActiveLayer}><Focus size={14} /> Centre</button>}</div>
                 {imageSizingEnabled && <label className="control-row"><span><ZoomIn size={16} /> Size / crop <output>{Math.round(imageScale * 100)}%</output></span><input type="range" min="0.35" max="3" step="0.02" value={imageScale} onChange={(event) => setImageScale(Number(event.target.value))} /></label>}
                 {template.tools.allowMove && <div className="position-grid"><NumberControl label="Horizontal" value={imageX} onChange={setImageX} /><NumberControl label="Vertical" value={imageY} onChange={setImageY} /></div>}
                 {template.tools.allowRotate && <label className="control-row"><span><RotateCcw size={16} /> Rotation <output>{imageRotation}°</output></span><input type="range" min="-180" max="180" step="1" value={imageRotation} onChange={(event) => setImageRotation(Number(event.target.value))} /></label>}
@@ -383,14 +382,23 @@ export function Customizer({ product }: { product: Product }) {
             </div>
           ) : template.tools.text ? (
             <div className="tool-content">
-              <h2>Add realistic text</h2><p>Choose your font, style, opacity, and surface effect. Product default follows this product’s original mapping.</p>
+              <h2>Add realistic text</h2><p>Choose your font, style, opacity, and surface effect. Drag text anywhere in the same print area as your photo.</p>
               <label className="text-field"><span>Your text</span><input value={text} maxLength={40} placeholder={font === "malayalam" ? "നിങ്ങളുടെ സന്ദേശം" : "Type your message"} lang={font === "malayalam" ? "ml" : undefined} style={font === "malayalam" ? anekMalayalam.style : undefined} onChange={(event) => setText(event.target.value)} /><small>{text.length}/40</small></label>
               <div className="font-options"><span>Font</span><div><button className={font === "classic" ? "active" : ""} aria-pressed={font === "classic"} onClick={() => setFont("classic")}>Classic</button><button className={font === "clean" ? "active" : ""} aria-pressed={font === "clean"} onClick={() => setFont("clean")}>Clean</button><button className={font === "playful" ? "active" : ""} aria-pressed={font === "playful"} onClick={() => setFont("playful")}>Playful</button><button className={font === "malayalam" ? "active" : ""} aria-pressed={font === "malayalam"} style={anekMalayalam.style} onClick={() => setFont("malayalam")}>Malayalam (Anek)</button></div></div>
               <div className="font-options text-style-options" role="group" aria-label="Text style"><span>Style</span><div><button className={textStyle.weight >= 600 ? "active" : ""} aria-pressed={textStyle.weight >= 600} onClick={() => setTextBold(textStyle.weight < 600)}><strong>Bold</strong></button><button className={textStyle.italic ? "active" : ""} aria-pressed={textStyle.italic} onClick={() => setTextItalic(!textStyle.italic)}><em>Italic</em></button></div></div>
               <div className="font-options" role="group" aria-label="Text surface"><span>Surface effect</span><div>{([ ["product", "Product default"], ["normal", "Normal"], ["wrinkled", "Wrinkled"], ["cylindrical", "Cylindrical"] ] as const).map(([value, label]) => <button key={value} className={textSurface === value ? "active" : ""} aria-pressed={textSurface === value} onClick={() => setTextSurface(value)}>{label}</button>)}</div></div>
+              {textSurface === "wrinkled" && <>
+                <TextEffectSlider label="Wrinkle Intensity" value={textDeformation.wrinkleIntensity} onChange={(wrinkleIntensity) => setTextDeformation((current) => ({ ...current, wrinkleIntensity }))} />
+                {needsTextMap && textWrinkleMap?.key !== textMapKey && textDeformation.wrinkleIntensity > 0 && <p className="editor-message" role="status">{textMapError ? "The product wrinkle map could not be loaded. The preview is using sample folds." : "Preparing the product’s wrinkle map…"}</p>}
+              </>}
+              {textSurface === "cylindrical" && <>
+                <TextEffectSlider label="Cylindrical Intensity" value={textDeformation.cylindricalIntensity} onChange={(cylindricalIntensity) => setTextDeformation((current) => ({ ...current, cylindricalIntensity }))} />
+                <TextEffectSlider label="Horizontal Curvature" value={textDeformation.horizontalCurvature} onChange={(horizontalCurvature) => setTextDeformation((current) => ({ ...current, horizontalCurvature }))} />
+                <TextEffectSlider label="Vertical Deformation" value={textDeformation.verticalDeformation} onChange={(verticalDeformation) => setTextDeformation((current) => ({ ...current, verticalDeformation }))} />
+                <TextEffectSlider label="Perspective / Depth" value={textDeformation.perspective} min={-35} max={35} suffix="°" onChange={(perspective) => setTextDeformation((current) => ({ ...current, perspective }))} />
+              </>}
               <label className="control-row"><span>Text opacity <output>{textOpacity}%</output></span><input aria-label="Text opacity" type="range" min="0" max="100" step="1" value={textOpacity} onChange={(event) => setTextOpacity(Number(event.target.value))} /></label>
               {font === "malayalam" && (malayalamFontStatus !== "ready" || loadedMalayalamFont !== malayalamFontKey) && <p className="editor-message" role="status">{malayalamFontStatus === "error" ? "The Malayalam font could not load. Please reload the page and try again." : "Loading Malayalam font…"}</p>}
-              {textArtwork && template.tools.allowMove && <div className="auto-adjust-actions"><button onClick={centerActiveLayer}><Focus size={14} /> Centre text</button></div>}
               <label className="control-row"><span><Type size={16} /> Text size <output>{textSize}</output></span><input type="range" min="12" max="72" step="1" value={textSize} onChange={(event) => setTextSize(Number(event.target.value))} /></label>
               {template.tools.allowMove && <div className="position-grid"><NumberControl label="Horizontal" value={textX} onChange={setTextX} /><NumberControl label="Vertical" value={textY} onChange={setTextY} /></div>}
               {template.tools.allowRotate && <label className="control-row"><span><RotateCcw size={16} /> Rotation <output>{textRotation}°</output></span><input type="range" min="-180" max="180" step="1" value={textRotation} onChange={(event) => setTextRotation(Number(event.target.value))} /></label>}
@@ -415,7 +423,7 @@ export function Customizer({ product }: { product: Product }) {
 }
 
 function NumberControl({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
-  return <label className="position-control"><span>{label}</span><div><button aria-label={`Decrease ${label.toLowerCase()} position`} onClick={() => onChange(clamp(value - 5, -120, 120))}>−</button><output>{value}</output><button aria-label={`Increase ${label.toLowerCase()} position`} onClick={() => onChange(clamp(value + 5, -120, 120))}>+</button></div></label>;
+  return <label className="position-control"><span>{label}</span><div><button aria-label={`Decrease ${label.toLowerCase()} position`} onClick={() => onChange(value - 5)}>−</button><output>{value}</output><button aria-label={`Increase ${label.toLowerCase()} position`} onClick={() => onChange(value + 5)}>+</button></div></label>;
 }
 
 function createTextArtwork(text: string, color: string, font: TextFont, size: number, weight: number, italic: boolean) {
@@ -492,4 +500,8 @@ async function exportProductPreview(stage: HTMLDivElement, artwork: HTMLDivEleme
   for (const layer of Array.from(artwork.querySelectorAll("canvas"))) { context.globalCompositeOperation = canvasBlendOperation(layer.dataset.blendMode); context.drawImage(layer, -width / 2, -height / 2, width, height); }
   context.restore();
   return exportCanvasBlob(output);
+}
+
+function TextEffectSlider({ label, value, onChange, min = 0, max = 100, suffix = "%" }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; suffix?: string }) {
+  return <label className="control-row text-effect-slider"><span>{label}<output>{value}{suffix}</output></span><input aria-label={label} type="range" min={min} max={max} step="1" value={value} onChange={(event) => onChange(Number(event.target.value))} /></label>;
 }

@@ -308,3 +308,15 @@ button { color: inherit; }
 @media (max-width: 560px) {
   .customizer-header { grid-template-columns: 40px 1fr 40px; height: 62px; }.customizer-back { font-size: 0; }.customizer-back svg { width: 20px; }.customizer-header::after { content: ""; }.customizer-stage-wrap { padding: 14px 0 0; }.customizer-stage-head { padding: 0 15px; }.customizer-stage { min-height: 470px; }.live-preview-status { padding: 0 15px; }.live-preview-status span:last-child { display: none; }.customizer-panel { padding-top: 24px; }
 }
+
+.editable-print-area .resize-handle { padding: 0; margin: 0; right: auto; bottom: auto; transform: translate(-50%, -50%); touch-action: none; }
+.resize-n { left: 50%; top: 0; cursor: ns-resize; }
+.resize-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.resize-e { left: 100%; top: 50%; cursor: ew-resize; }
+.resize-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.resize-s { left: 50%; top: 100%; cursor: ns-resize; }
+.resize-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.resize-w { left: 0; top: 50%; cursor: ew-resize; }
+.resize-nw { left: 0; top: 0; cursor: nwse-resize; }
+
+.text-effect-slider input[type="range"] { min-height: 36px; width: 100%; cursor: pointer; }
