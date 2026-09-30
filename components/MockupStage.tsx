@@ -4,9 +4,10 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { fitMockupFrame } from "@/lib/mockupGeometry";
 
-export function MockupStage({ src, alt, className, imageClassName, stageRef, children, onReady, onError }: {
+export function MockupStage({ src, alt, className, imageClassName, stageRef, children, onReady, onError, zoom = 1 }: {
   src: string; alt: string; className: string; imageClassName: string;
   stageRef: RefObject<HTMLDivElement | null>; children: ReactNode;
+  zoom?: number;
   onReady?: (src: string) => void; onError?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -28,7 +29,8 @@ export function MockupStage({ src, alt, className, imageClassName, stageRef, chi
 
   const frame = fitMockupFrame(available.width, available.height, imageSize.width, imageSize.height);
   return <div className={className} ref={containerRef}>
-    <div className="mockup-coordinate-plane" ref={stageRef} style={{ width: frame.width || "100%", height: frame.height || "100%" }}>
+    <div className="mockup-zoom-frame" style={{ width: frame.width ? frame.width * zoom : "100%", height: frame.height ? frame.height * zoom : "100%", flex: "none", position: "relative" }}>
+    <div className="mockup-coordinate-plane" ref={stageRef} style={{ width: frame.width || "100%", height: frame.height || "100%", transform: zoom === 1 ? undefined : `scale(${zoom})`, transformOrigin: "top left" }}>
       <Image src={src} alt={alt} fill sizes="(max-width: 760px) 100vw, 70vw" preload
         crossOrigin="anonymous" unoptimized className={imageClassName}
         style={{ padding: frame.padding }} onLoad={(event) => {
@@ -39,6 +41,7 @@ export function MockupStage({ src, alt, className, imageClassName, stageRef, chi
           }
         }} onError={onError} />
       {children}
+    </div>
     </div>
   </div>;
 }
