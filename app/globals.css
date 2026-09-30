@@ -381,3 +381,13 @@ button { color: inherit; }
 @media (max-width: 600px) {
   .shop-section .product-grid-slider { grid-auto-columns: calc((100% - 12px) / 2); }
 }
+
+@media (max-width: 900px) {
+  .header-inner { grid-template-columns: 44px minmax(0, 1fr) 88px; gap: 6px; }
+  .header-actions { gap: 0; }
+  .header-actions .icon-button, .header-inner > .mobile-menu { width: 44px; height: 44px; color: var(--green); }
+  .header-search-button { display: grid; }
+}
+@media (max-width: 360px) {
+  .header-inner > .brand-logo { font-size: 18px; gap: 5px; }
+}

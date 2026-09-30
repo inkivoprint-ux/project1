@@ -45,7 +45,7 @@ export function Header({ cartCount = 0, searchValue = "", searchResultsCount, on
             <a href="#contact">Contact</a>
           </nav>
           <div className="header-actions">
-            <button className="icon-button hide-mobile" aria-label="Search products" aria-expanded={searchOpen} onClick={() => setSearchOpen(true)}><Search size={20} /></button>
+            <button className="icon-button header-search-button" aria-label="Search products" aria-expanded={searchOpen} onClick={() => setSearchOpen(true)}><Search size={20} /></button>
             <button className="icon-button cart-button" aria-label={`Cart with ${cartCount} items`} onClick={onCartClick}>
               <ShoppingBag size={20} />
               {cartCount > 0 && <span className="cart-count">{cartCount}</span>}
