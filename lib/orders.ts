@@ -10,7 +10,7 @@ export type AssetKind = "original" | "edited" | "preview";
 export type ImageMimeType = "image/jpeg" | "image/png" | "image/webp";
 export type DraftAsset = { kind: AssetKind; fileName: string; mimeType: ImageMimeType; blob: Blob };
 export type DesignDraft = { id: string; productId: string; configuration: Record<string, unknown>; assets: DraftAsset[]; createdAt: string };
-export type OrderAsset = { kind: AssetKind; fileName: string; mimeType: string; storagePath?: string; designId?: string };
+export type OrderAsset = { kind: AssetKind; fileName: string; mimeType: string; storagePath?: string; uploadItemIndex?: number; designId?: string };
 export type OrderItemRecord = { productId: string; productName: string; quantity: number; unitPrice: number; size?: TShirtSize; designId?: string; configuration?: Record<string, unknown>; assets: OrderAsset[] };
 export type OrderRecord = {
   id: string; orderNumber: string; customerName: string; phone: string; address: string; subtotal: number;
@@ -170,6 +170,7 @@ export async function submitCartOrder(args: { cart: CartEntry[]; products: Produ
   if (!args.cart.length) throw new Error("Your cart is empty.");
   const items: OrderItemRecord[] = [];
   const formData = new FormData();
+  const uploadedDesigns = new Map<string, { itemIndex: number; assets: DraftAsset[] }>();
   for (const entry of args.cart) {
     const product = args.products.find((item) => item.id === entry.productId);
     if (!product) throw new Error("A product in your cart is no longer available.");
@@ -182,9 +183,15 @@ export async function submitCartOrder(args: { cart: CartEntry[]; products: Produ
       throw new Error(`The cropped image or product preview for ${product.name} is missing. Please customize it again.`);
     }
     const itemIndex = items.length;
-    const assets = draft?.assets.map((asset) => ({ kind: asset.kind, fileName: asset.fileName, mimeType: asset.mimeType, designId: draft.id })) ?? [];
+    let shared = draft ? uploadedDesigns.get(draft.id) : undefined;
+    if (draft && !shared) {
+      const prepared = await Promise.all(draft.assets.map(prepareCheckoutAsset));
+      shared = { itemIndex, assets: prepared };
+      uploadedDesigns.set(draft.id, shared);
+      prepared.forEach((asset) => formData.append(`asset:${itemIndex}:${asset.kind}`, asset.blob, asset.fileName));
+    }
+    const assets = shared?.assets.map((asset) => ({ kind: asset.kind, fileName: asset.fileName, mimeType: asset.mimeType, designId: draft!.id, uploadItemIndex: shared!.itemIndex })) ?? [];
     items.push({ productId: product.id, productName: product.name, quantity: entry.quantity, unitPrice: product.price, ...(entry.size ? { size: entry.size } : {}), designId: draft?.id, configuration: draft?.configuration, assets });
-    draft?.assets.forEach((asset) => formData.append(`asset:${itemIndex}:${asset.kind}`, asset.blob, asset.fileName));
   }
   const subtotal = items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
   const basePayload = { customerName: args.customerName.trim(), phone: args.phone.trim(), address: args.address.trim(), subtotal, items };
@@ -275,4 +282,25 @@ export async function deleteOrderAsset(args: { orderId: string; itemIndex: numbe
   const nextOrder = removeAssetFromOrderRecord(order, args.itemIndex, args.asset.kind, args.asset.fileName);
   persistOrders(loadOrders().map((item) => item.id === order.id ? nextOrder : item), nextOrder);
   return nextOrder;
+}
+
+async function prepareCheckoutAsset(asset: DraftAsset): Promise<DraftAsset> {
+  // Keep the print-ready transparent PNG untouched. Optimise only the photo
+  // reference and product preview; the browser draft retains every original.
+  if (asset.kind === "edited" || asset.blob.size < 250_000) return asset;
+  const url = URL.createObjectURL(asset.blob);
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("The checkout photo could not be read.")); image.src = url; });
+    const canvas = document.createElement("canvas");
+    const scale = Math.min(1, (asset.kind === "preview" ? 1200 : 3000) / Math.max(image.naturalWidth, image.naturalHeight));
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return asset;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", asset.kind === "preview" ? 0.85 : 0.94));
+    if (!blob || blob.type !== "image/webp" || blob.size >= asset.blob.size) return asset;
+    return { ...asset, blob, mimeType: "image/webp", fileName: asset.fileName.replace(/\.[^.]+$/, ".webp") };
+  } finally { URL.revokeObjectURL(url); }
 }

@@ -10,6 +10,7 @@ const assetSchema = z.object({
   fileName: z.string().min(1).max(180).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/).refine((name) => !name.includes("..")),
   mimeType: z.enum(supportedMimeTypes),
   storagePath: z.string().optional(),
+  uploadItemIndex: z.number().int().min(0).max(98).optional(),
   designId: z.string().min(1).max(180).optional(),
 });
 
@@ -77,7 +78,12 @@ export function collectOrderFiles(payload: OrderPayload, formData: FormData) {
 
   payload.items.forEach((item, itemIndex) => {
     item.assets.forEach((asset) => {
-      const key = `asset:${itemIndex}:${asset.kind}`;
+      const uploadIndex = asset.uploadItemIndex ?? itemIndex;
+      if (uploadIndex > itemIndex) throw new Error("Invalid shared order file reference.");
+      const original = payload.items[uploadIndex];
+      const declaration = original?.assets.find((entry) => entry.kind === asset.kind);
+      if (!declaration || original.designId !== item.designId || original.productId !== item.productId || declaration.fileName !== asset.fileName || declaration.mimeType !== asset.mimeType || (declaration.uploadItemIndex ?? uploadIndex) !== uploadIndex) throw new Error("The shared customization file does not match this item.");
+      const key = `asset:${uploadIndex}:${asset.kind}`;
       expectedKeys.add(key);
       if (formData.getAll(key).length !== 1) throw new Error(`Exactly one file is required for ${asset.fileName}.`);
       const value = formData.get(key);
@@ -87,7 +93,7 @@ export function collectOrderFiles(payload: OrderPayload, formData: FormData) {
         throw new Error(`${asset.fileName} must be a JPG, PNG, or WebP image.`);
       }
       if (value.size > 20 * 1024 * 1024) throw new Error(`${asset.fileName} exceeds 20 MB.`);
-      files.set(key, value);
+      files.set(`asset:${itemIndex}:${asset.kind}`, value);
     });
   });
 

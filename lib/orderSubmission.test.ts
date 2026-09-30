@@ -75,3 +75,16 @@ describe("order submission validation", () => {
     expect(parsed.items.map((item) => [item.size, item.quantity])).toEqual([["S", 1], ["XL", 2]]);
   });
 });
+
+it("reuses one design upload across T-shirt sizes and rejects mismatched references", () => {
+  const item = payload.items[0];
+  const shared = { ...payload, subtotal: 1598, items: [{ ...item, size: "M", assets: item.assets.map((asset) => ({ ...asset, uploadItemIndex: 0 })) }, { ...item, size: "L", assets: item.assets.map((asset) => ({ ...asset, uploadItemIndex: 0 })) }] };
+  const data = new FormData();
+  data.set("asset:0:edited", new File(["edited"], "design-1-cropped.png", { type: "image/png" }));
+  data.set("asset:0:preview", new File(["preview"], "design-1-preview.png", { type: "image/png" }));
+  const files = collectOrderFiles(parseOrderPayload(shared), data);
+  expect(files.get("asset:0:edited")).toBe(files.get("asset:1:edited"));
+  shared.items[1].designId = "different-design";
+  shared.items[1].assets.forEach((asset) => { asset.designId = "different-design"; });
+  expect(() => collectOrderFiles(parseOrderPayload(shared), data)).toThrow("does not match");
+});
