@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { type BlendMode, type MaskPoint, type MaskShape, type SurfaceType } from "@/lib/customization";
+import { adjustArtworkPixels } from "@/lib/artworkColor";
 import { finishArtwork } from "@/lib/artworkFinishing";
 import { calculateRenderSize, containImageSize } from "@/lib/renderQuality";
 import { loadCanvasImage } from "@/lib/canvasImages";
@@ -15,6 +16,9 @@ type Props = {
   taper: number;
   opacity: number;
   blendMode: BlendMode;
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
   maskRadius: number;
   maskShape?: MaskShape;
   maskPoints?: MaskPoint[];
@@ -44,6 +48,7 @@ export function WarpedArtwork({
   src, curvature, perspective, taper, opacity, blendMode, maskRadius, maskShape = "rectangle", maskPoints = EMPTY_MASK_POINTS, surface,
   precisionWrap = false, wrapAngle = 110, edgeFade = 0, surfaceMap,
   displacementStrength = 55, fabricBlendStrength = 48, fabricTextureStrength = 18,
+  brightness = 100, contrast = 100, saturation = 100,
   deformationIntensity, verticalDeformation,
   surfaceShading = true, artworkOpacity = 1, onRenderStateChange,
   scale = 1, imageRotation = 0, offsetX = 0, offsetY = 0,
@@ -113,6 +118,11 @@ export function WarpedArtwork({
       const drawHeight = fitted.height;
       workContext.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       workContext.restore();
+      if (brightness !== 100 || contrast !== 100 || saturation !== 100) {
+        const pixels = workContext.getImageData(0, 0, width, height);
+        adjustArtworkPixels(pixels.data, { brightness, contrast, saturation });
+        workContext.putImageData(pixels, 0, 0);
+      }
       context.clearRect(0, 0, width, height);
 
       if (surface === "flat") context.drawImage(work, 0, 0);
@@ -130,7 +140,7 @@ export function WarpedArtwork({
       if (!cancelled) { context.clearRect(0, 0, width, height); onRenderStateChange?.("error"); }
     });
     return () => { cancelled = true; };
-  }, [src, curvature, taper, scale, imageRotation, offsetX, offsetY, surface, precisionWrap, wrapAngle, edgeFade, surfaceMap, displacementStrength, fabricBlendStrength, fabricTextureStrength, surfaceShading, deformationIntensity, verticalDeformation, artworkOpacity, opacity, perspective, maskRadius, maskShape, maskPoints, onRenderStateChange, renderSize]);
+  }, [src, curvature, taper, scale, imageRotation, offsetX, offsetY, surface, precisionWrap, wrapAngle, edgeFade, surfaceMap, displacementStrength, fabricBlendStrength, fabricTextureStrength, brightness, contrast, saturation, surfaceShading, deformationIntensity, verticalDeformation, artworkOpacity, opacity, perspective, maskRadius, maskShape, maskPoints, onRenderStateChange, renderSize]);
 
   // Blend the enclosing positioned layer against the photograph, not inside an
   // isolated stacking context. Exports use the same mode from this metadata.

@@ -37,7 +37,6 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
   const dragRef = useRef<DragState>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const mockupRef = useRef<HTMLInputElement>(null);
-  const surfaceMapRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -84,21 +83,6 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
       setNotice("Mockup loaded · position the print area manually");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The mockup could not be prepared");
-    } finally {
-      event.target.value = "";
-    }
-  }
-
-  async function handleSurfaceMap(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 15 * 1024 * 1024) { setNotice("Choose a JPG, PNG, or WebP map smaller than 15 MB"); return; }
-    try {
-      const map = await prepareSurfaceMap(file);
-      updateArea("surfaceMap", map);
-      setNotice("Custom displacement map loaded");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "The displacement map could not be read");
     } finally {
       event.target.value = "";
     }
@@ -247,12 +231,11 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
                 <RangeField label="Taper" value={area.taper} min={-50} max={50} onChange={(v) => updateArea("taper", v)} suffix="%" />
               </ControlSection>}
               {tab === "effects" && <ControlSection title="Artwork finishing" description="Blend the print naturally with the product photograph.">
-                {area.surface === "fabric" && <div className={`surface-map-card ${area.surfaceMap ? "ready" : ""}`}>
-                  <div><span><Sparkles size={16} /></span><div><strong>Fabric wrinkle map</strong><small>{area.surfaceMap ? "A product-specific map is bending artwork along this shirt’s actual folds." : "Upload a displacement map to follow the product’s wrinkles, shadows, and highlights."}</small></div></div>
-                  <div className="smart-object-actions"><button onClick={() => surfaceMapRef.current?.click()}><Upload size={14} /> Upload map</button></div>
-                  {area.surfaceMap && <p><Check size={12} /> Surface map active</p>}
-                </div>}
                 <label className="select-field"><span>Blend mode</span><select value={area.blendMode} onChange={(e) => updateArea("blendMode", e.target.value as TemplateArea["blendMode"])}><option value="normal">Normal</option><option value="screen">Screen</option><option value="multiply">Multiply</option><option value="overlay">Overlay</option></select><ChevronDown /></label>
+                <RangeField label="Brightness" value={area.brightness ?? 100} min={0} max={200} onChange={(v) => updateArea("brightness", v)} suffix="%" />
+                <RangeField label="Contrast" value={area.contrast ?? 100} min={0} max={200} onChange={(v) => updateArea("contrast", v)} suffix="%" />
+                <RangeField label="Saturation" value={area.saturation ?? 100} min={0} max={200} onChange={(v) => updateArea("saturation", v)} suffix="%" />
+                <button className="secondary-upload" type="button" onClick={() => { updateArea("brightness", 100); updateArea("contrast", 100); updateArea("saturation", 100); }}><RotateCcw size={15} /> Reset colour adjustments</button>
                 {area.surface === "fabric" && <RangeField label="Fold displacement strength" value={area.displacementStrength ?? 62} min={0} max={100} onChange={(v) => updateArea("displacementStrength", v)} suffix="%" />}
                 {area.surface === "fabric" && <RangeField label="Wrinkle shadows & highlights" value={area.fabricBlendStrength ?? 48} min={0} max={100} onChange={(v) => updateArea("fabricBlendStrength", v)} suffix="%" />}
                 {area.surface === "fabric" && <RangeField label="Fabric texture detail" value={area.fabricTextureStrength ?? 18} min={0} max={100} onChange={(v) => updateArea("fabricTextureStrength", v)} suffix="%" />}
@@ -278,7 +261,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
             <div className={`template-stage-frame ${viewport}`}>
               <MockupStage key={mockupSrc} src={mockupSrc} alt={`${product.name} ${productView.label}`} className="template-stage" imageClassName="template-product-image" stageRef={stageRef}>
                 <div className={`editable-print-area editing-${editTarget}${showPrintGuides ? "" : " guides-hidden"}`} style={areaStyle} onPointerDown={(e) => editTarget === "mask" ? addMaskPoint(e) : beginDrag(e, "move")} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
-                  <WarpedArtwork src={artwork} curvature={area.curvature} perspective={area.perspective} taper={area.taper} opacity={area.opacity} blendMode={area.blendMode} maskRadius={area.maskRadius} maskShape={area.maskShape} maskPoints={area.maskPoints} surface={area.surface} precisionWrap={area.precisionWrap} wrapAngle={area.wrapAngle} edgeFade={area.edgeFade} surfaceMap={area.surfaceMap} displacementStrength={area.displacementStrength} fabricBlendStrength={area.fabricBlendStrength} fabricTextureStrength={area.fabricTextureStrength} scale={area.defaultArtworkScale ?? 1} imageRotation={area.defaultArtworkRotation ?? 0} offsetX={area.defaultArtworkOffsetX ?? 0} offsetY={area.defaultArtworkOffsetY ?? 0} />
+                  <WarpedArtwork src={artwork} curvature={area.curvature} perspective={area.perspective} taper={area.taper} opacity={area.opacity} blendMode={area.blendMode} brightness={area.brightness} contrast={area.contrast} saturation={area.saturation} maskRadius={area.maskRadius} maskShape={area.maskShape} maskPoints={area.maskPoints} surface={area.surface} precisionWrap={area.precisionWrap} wrapAngle={area.wrapAngle} edgeFade={area.edgeFade} surfaceMap={area.surfaceMap} displacementStrength={area.displacementStrength} fabricBlendStrength={area.fabricBlendStrength} fabricTextureStrength={area.fabricTextureStrength} scale={area.defaultArtworkScale ?? 1} imageRotation={area.defaultArtworkRotation ?? 0} offsetX={area.defaultArtworkOffsetX ?? 0} offsetY={area.defaultArtworkOffsetY ?? 0} />
                   {showPrintGuides && editTarget === "mask" && <><div className="mask-outline" style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} />{area.maskShape === "custom" && (area.maskPoints ?? []).map((point, index) => <i key={`${point.x}-${point.y}-${index}`} className="mask-point" style={{ left: `${point.x}%`, top: `${point.y}%` }}><b>{index + 1}</b></i>)}</>}
                   {showPrintGuides && editTarget === "area" && <><div className="production-bleed-guide" style={{ left: `${-bleedX}%`, right: `${-bleedX}%`, top: `${-bleedY}%`, bottom: `${-bleedY}%` }}><span>BLEED</span></div><div className="production-safe-guide" style={{ left: `${safeX}%`, right: `${safeX}%`, top: `${safeY}%`, bottom: `${safeY}%` }}><span>SAFE</span></div></>}
                   {showPrintGuides && <span className="area-tag">{editTarget === "artwork" ? "Drag artwork" : editTarget === "mask" ? area.maskShape === "custom" ? "Click to draw mask" : `${area.maskShape ?? "rectangle"} mask` : area.name}</span>}{showPrintGuides && editTarget === "area" && resizeEdges.map((edge) => <button key={edge} type="button" aria-label={`Resize print area ${edge}`} className={`resize-handle resize-${edge}`} onPointerDown={(e) => { e.stopPropagation(); beginDrag(e, "resize", "area", edge); }} />)}
@@ -288,7 +271,6 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
             <div className="template-preview-foot"><div><strong>{product.name} · {productView.label}</strong><small>{area.surface.replace("-", " ")} · {area.widthMm} × {area.heightMm} mm · {area.targetDpi} DPI</small></div><button onClick={() => mockupRef.current?.click()}><Upload size={15} /> Replace product photo</button><button onClick={() => uploadRef.current?.click()}><ImagePlus size={15} /> Replace test image</button></div>
             <input ref={uploadRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleArtwork} />
             <input ref={mockupRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleMockup} />
-            <input ref={surfaceMapRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleSurfaceMap} />
           </section>
         </div>
       </section>
@@ -318,37 +300,6 @@ function prepareMockup(file: File) {
       resolve(canvas.toDataURL("image/webp", 0.88));
     };
     image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("The mockup image could not be read")); };
-    image.src = objectUrl;
-  });
-}
-
-function prepareSurfaceMap(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new window.Image();
-    image.onload = () => {
-      const size = 512;
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (!context) { URL.revokeObjectURL(objectUrl); reject(new Error("Canvas processing is unavailable")); return; }
-      context.fillStyle = "rgb(128,128,128)";
-      context.fillRect(0, 0, size, size);
-      context.drawImage(image, 0, 0, size, size);
-      const pixels = context.getImageData(0, 0, size, size);
-      for (let index = 0; index < pixels.data.length; index += 4) {
-        const value = Math.round(pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114);
-        pixels.data[index] = value;
-        pixels.data[index + 1] = value;
-        pixels.data[index + 2] = value;
-        pixels.data[index + 3] = 255;
-      }
-      context.putImageData(pixels, 0, 0);
-      URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL("image/webp", 0.88));
-    };
-    image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("The surface map could not be read")); };
     image.src = objectUrl;
   });
 }
