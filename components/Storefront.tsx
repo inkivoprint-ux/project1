@@ -108,7 +108,7 @@ export function Storefront({ initialProducts = products }: { initialProducts?: P
                   </div>
                   <div className="product-meta">
                     <div className="product-title-row"><h3 title={product.name}>{product.name.split(/\s+/).slice(0, 4).join(" ")}{product.name.split(/\s+/).length > 4 ? "…" : ""}</h3></div>
-                    <div className="price-row"><strong>{formatPrice(product.price)}</strong></div>
+                    <div className="price-row"><strong><span className="sr-only">Selling price </span>{formatPrice(product.price)}</strong>{product.compareAt !== undefined && product.compareAt > product.price && <del><span className="sr-only">Compare-at price </span>{formatPrice(product.compareAt)}</del>}</div>
                   </div>
                 </Link>
               </article>
