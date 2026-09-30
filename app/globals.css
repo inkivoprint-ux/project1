@@ -153,7 +153,7 @@ button { color: inherit; }
 
 
 
-.gifting-cta { background: var(--green); color: var(--cream); padding: 85px 0; position: relative; overflow: hidden; }.gifting-cta::after { content: "♡"; position: absolute; right: 2%; top: -60%; font-family: var(--serif); font-size: 500px; color: rgba(255,255,255,.035); transform: rotate(-15deg); }.gifting-inner { display: flex; align-items: flex-end; justify-content: space-between; position: relative; z-index: 2; }.gifting-cta h2 { font-size: clamp(48px,5vw,70px); }.gifting-cta p { color: rgba(239,227,212,.67); font-size: 13px; margin-top: 20px; }.gifting-cta .button { margin-bottom: 8px; }
+.gifting-cta { background: var(--green); color: var(--cream); padding: 85px 0; position: relative; overflow: hidden; }.gifting-heart { position: absolute; right: 2%; top: -70px; width: 440px; height: 440px; color: rgba(239,227,212,.1); transform: rotate(-15deg); pointer-events: none; }.gifting-inner { display: flex; align-items: flex-end; justify-content: space-between; position: relative; z-index: 2; }.gifting-cta h2 { font-size: clamp(48px,5vw,70px); }.gifting-cta p { color: rgba(239,227,212,.67); font-size: 13px; margin-top: 20px; }.gifting-cta .button { margin-bottom: 8px; }
 
 .footer { background: #022f28; color: rgba(239,227,212,.72); padding: 70px 0 24px; }.footer-grid { display: grid; grid-template-columns: 1.4fr .65fr .65fr 1.1fr; gap: 55px; }.footer-grid h3 { color: var(--cream); font-size: 10px; text-transform: uppercase; letter-spacing: .15em; margin: 0 0 19px; }.footer-grid > div { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }.footer-grid p { font-size: 11px; line-height: 1.7; margin: 9px 0; }.footer-grid a:not(.brand-logo) { font-size: 10px; }.footer-grid small { font-size: 9px; opacity: .55; }.footer-bottom { display: flex; justify-content: space-between; border-top: 1px solid rgba(239,227,212,.12); padding-top: 20px; margin-top: 50px; font-size: 8px; }.footer-bottom div { display: flex; gap: 20px; }
 
@@ -326,4 +326,8 @@ button { color: inherit; }
 .preview-toolbar .print-guides-toggle { min-height: 34px; height: auto; border: 1px solid #d9dfda; color: var(--green); font-size: 11px; }
 @media (max-width: 760px) {
   .preview-toolbar { height: auto; min-height: 48px; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+}
+
+@media (max-width: 760px) {
+  .gifting-heart { width: clamp(150px, 42vw, 230px); height: auto; top: 24px; right: 14px; color: rgba(239,227,212,.18); transform: rotate(-12deg); }
 }

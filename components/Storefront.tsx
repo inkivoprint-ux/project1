@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, Gift, Mail, Phone, RotateCcw, SearchX, ShieldCheck, Sparkles, Truck } from "lucide-react";
+import { ArrowRight, Check, Gift, Heart, Mail, Phone, RotateCcw, SearchX, ShieldCheck, Sparkles, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { addCartItem, cartItemCount, loadCart, removeCartItem, subscribeToCart, updateCartItem, updateCartItemSize, type CartEntry } from "@/lib/cart";
 import { isTShirtCategory } from "@/lib/productSizes";
@@ -130,6 +130,7 @@ export function Storefront({ initialProducts = products }: { initialProducts?: P
       </section>
 
       <section className="gifting-cta" id="gifting">
+        <Heart className="gifting-heart" aria-hidden="true" strokeWidth={1} />
         <div className="container gifting-inner">
           <div><span className="eyebrow light">Gifting for teams & celebrations</span><h2>Many people.<br /><em>One thoughtful gesture.</em></h2><p>Personalised gifting for teams, weddings, events, and everyone on your list.</p></div>
           <a className="button button--cream" href={`${contact.whatsapp}?text=Hello%20Inkivo%2C%20I%27d%20like%20to%20discuss%20a%20bulk%20gifting%20order.`} target="_blank" rel="noopener noreferrer">Plan a bulk order <ArrowRight size={18} /></a>
