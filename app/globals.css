@@ -391,3 +391,8 @@ button { color: inherit; }
 @media (max-width: 360px) {
   .header-inner > .brand-logo { font-size: 18px; gap: 5px; }
 }
+
+.editable-print-area .mask-point { pointer-events: auto; cursor: grab; padding: 0; touch-action: none; }
+.editable-print-area .mask-point:active { cursor: grabbing; }
+.editable-print-area .mask-point::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; }
+.editable-print-area .mask-point:focus-visible { outline: 2px solid #f0ae51; outline-offset: 3px; }

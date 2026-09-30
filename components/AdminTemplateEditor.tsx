@@ -1,5 +1,6 @@
 "use client";
 
+import { maskPointerPosition } from "@/lib/maskEditing";
 import { previewBlendMode } from "@/lib/artworkBlend";
 import Link from "next/link";
 import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
@@ -17,6 +18,7 @@ type ResizeEdge = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 const resizeEdges: ResizeEdge[] = ["n", "ne", "e", "se", "s", "sw", "w", "nw"];
 
 type DragState =
+  | { target: "point"; index: number }
   | { target: "area"; mode: "move" | "resize"; edge: ResizeEdge; clientX: number; clientY: number; area: TemplateConfig["area"] }
   | { target: "artwork"; mode: "move"; clientX: number; clientY: number; offsetX: number; offsetY: number }
   | null;
@@ -101,6 +103,14 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
     const drag = dragRef.current;
     const stage = stageRef.current;
     if (!drag || !stage) return;
+    if (drag.target === "point") {
+      const point = pointAtPointer(event);
+      setTemplate((current) => {
+        const currentArea = view === "back" ? current.backArea ?? current.area : current.area;
+        return replaceArea(current, { ...currentArea, maskPoints: (currentArea.maskPoints ?? []).map((existing, index) => index === drag.index ? point : existing) });
+      });
+      return;
+    }
     if (drag.target === "artwork") {
       const artworkBounds = event.currentTarget.getBoundingClientRect();
       const offsetX = clamp(drag.offsetX + ((event.clientX - drag.clientX) / Math.max(1, artworkBounds.width)) * 300, -120, 120);
@@ -140,15 +150,23 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
     setNotice(shape === "custom" ? "Click around the printable shape to add mask points" : `${shape} mask applied`);
   }
 
+  function pointAtPointer(event: ReactPointerEvent<HTMLDivElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return maskPointerPosition(event.clientX, event.clientY, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2, event.currentTarget.offsetWidth, event.currentTarget.offsetHeight, area.rotation);
+  }
+
+  function beginPointDrag(event: ReactPointerEvent<HTMLButtonElement>, index: number) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { target: "point", index };
+  }
+
   function addMaskPoint(event: ReactPointerEvent<HTMLDivElement>) {
     if ((area.maskShape ?? "rectangle") !== "custom") return;
     event.preventDefault();
     event.stopPropagation();
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const point = {
-      x: Math.round(clamp(((event.clientX - bounds.left) / Math.max(1, bounds.width)) * 100, 0, 100) * 10) / 10,
-      y: Math.round(clamp(((event.clientY - bounds.top) / Math.max(1, bounds.height)) * 100, 0, 100) * 10) / 10,
-    };
+    const point = pointAtPointer(event);
     const points = [...(area.maskPoints ?? []), point].slice(0, 24);
     updateArea("maskPoints", points);
     setNotice(`${points.length} mask point${points.length === 1 ? "" : "s"} added${points.length < 3 ? " · add at least 3" : " · polygon active"}`);
@@ -215,7 +233,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
                       {MASK_PRESETS.map((shape) => <button key={shape.id} aria-pressed={(area.maskShape ?? "rectangle") === shape.id} className={(area.maskShape ?? "rectangle") === shape.id ? "active" : ""} onClick={() => chooseMaskShape(shape.id)}><svg viewBox="-5 -5 110 110" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="6">{shape.id === "rectangle" ? <rect width="100" height="100" rx="8" /> : shape.id === "ellipse" ? <ellipse cx="50" cy="50" rx="50" ry="50" /> : <polygon points={getMaskPolygon(shape.id)?.map(({ x, y }) => `${x},${y}`).join(" ")} />}</svg>{shape.label}</button>)}
                       <button aria-pressed={area.maskShape === "custom"} className={area.maskShape === "custom" ? "active" : ""} onClick={() => chooseMaskShape("custom")}><Move /> Draw custom</button>
                     </div>
-                    {area.maskShape === "custom" && <div className="custom-mask-instructions"><strong>Click points clockwise around the shape</strong><small>{area.maskPoints?.length ?? 0} / 24 points · the last point automatically connects to the first.</small><div><button onClick={undoMaskPoint} disabled={!area.maskPoints?.length}><Undo2 size={13} /> Undo point</button><button onClick={() => updateArea("maskPoints", [])} disabled={!area.maskPoints?.length}><RotateCcw size={13} /> Clear</button></div></div>}
+                    {area.maskShape === "custom" && <div className="custom-mask-instructions"><strong>Click to add points; drag existing points</strong><small>{area.maskPoints?.length ?? 0} / 24 points · resize the outline using the edge and corner handles.</small><div><button onClick={undoMaskPoint} disabled={!area.maskPoints?.length}><Undo2 size={13} /> Undo point</button><button onClick={() => updateArea("maskPoints", [])} disabled={!area.maskPoints?.length}><RotateCcw size={13} /> Clear</button></div></div>}
                     {(area.maskShape ?? "rectangle") === "rectangle" && <RangeField label="Corner radius" value={area.maskRadius} min={0} max={50} onChange={(v) => updateArea("maskRadius", v)} suffix="%" />}
                     <button className="secondary-upload" disabled={area.maskShape === "custom" && (area.maskPoints?.length ?? 0) < 3} onClick={() => { setEditTarget("artwork"); setNotice("Mask saved · now fit the artwork inside it"); }}><Check size={15} /> Finish shape and fit artwork</button>
                   </ControlSection>
@@ -264,9 +282,9 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
               <MockupStage key={mockupSrc} src={mockupSrc} alt={`${product.name} ${productView.label}`} className="template-stage" imageClassName="template-product-image" stageRef={stageRef}>
                 <div className={`editable-print-area editing-${editTarget}${showPrintGuides ? "" : " guides-hidden"}`} style={areaStyle} onPointerDown={(e) => editTarget === "mask" ? addMaskPoint(e) : beginDrag(e, "move")} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
                   <WarpedArtwork src={artwork} curvature={area.curvature} perspective={area.perspective} taper={area.taper} opacity={area.opacity} blendMode={area.blendMode} overlayStrength={area.overlayStrength} mockupSrc={mockupSrc} backdropArea={area} brightness={area.brightness} contrast={area.contrast} saturation={area.saturation} maskRadius={area.maskRadius} maskShape={area.maskShape} maskPoints={area.maskPoints} surface={area.surface} precisionWrap={area.precisionWrap} wrapAngle={area.wrapAngle} edgeFade={area.edgeFade} surfaceMap={area.surfaceMap} displacementStrength={area.displacementStrength} fabricBlendStrength={area.fabricBlendStrength} fabricTextureStrength={area.fabricTextureStrength} scale={area.defaultArtworkScale ?? 1} imageRotation={area.defaultArtworkRotation ?? 0} offsetX={area.defaultArtworkOffsetX ?? 0} offsetY={area.defaultArtworkOffsetY ?? 0} />
-                  {showPrintGuides && editTarget === "mask" && <><div className="mask-outline" style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} />{area.maskShape === "custom" && (area.maskPoints ?? []).map((point, index) => <i key={`${point.x}-${point.y}-${index}`} className="mask-point" style={{ left: `${point.x}%`, top: `${point.y}%` }}><b>{index + 1}</b></i>)}</>}
+                  {showPrintGuides && editTarget === "mask" && <><div className="mask-outline" style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} />{area.maskShape === "custom" && (area.maskPoints ?? []).map((point, index) => <button key={index} type="button" aria-label={`Move shape point ${index + 1}`} className="mask-point" onPointerDown={(event) => beginPointDrag(event, index)} style={{ left: `${point.x}%`, top: `${point.y}%` }}><b>{index + 1}</b></button>)}</>}
                   {showPrintGuides && editTarget === "area" && <><div className="production-bleed-guide" style={{ left: `${-bleedX}%`, right: `${-bleedX}%`, top: `${-bleedY}%`, bottom: `${-bleedY}%` }}><span>BLEED</span></div><div className="production-safe-guide" style={{ left: `${safeX}%`, right: `${safeX}%`, top: `${safeY}%`, bottom: `${safeY}%` }}><span>SAFE</span></div></>}
-                  {showPrintGuides && <span className="area-tag">{editTarget === "artwork" ? "Drag artwork" : editTarget === "mask" ? area.maskShape === "custom" ? "Click to draw mask" : `${area.maskShape ?? "rectangle"} mask` : area.name}</span>}{showPrintGuides && editTarget === "area" && resizeEdges.map((edge) => <button key={edge} type="button" aria-label={`Resize print area ${edge}`} className={`resize-handle resize-${edge}`} onPointerDown={(e) => { e.stopPropagation(); beginDrag(e, "resize", "area", edge); }} />)}
+                  {showPrintGuides && <span className="area-tag">{editTarget === "artwork" ? "Drag artwork" : editTarget === "mask" ? area.maskShape === "custom" ? "Click to draw mask" : `${area.maskShape ?? "rectangle"} mask` : area.name}</span>}{showPrintGuides && (editTarget === "area" || editTarget === "mask") && resizeEdges.map((edge) => <button key={edge} type="button" aria-label={`Resize print area ${edge}`} className={`resize-handle resize-${edge}`} onPointerDown={(e) => { e.stopPropagation(); beginDrag(e, "resize", "area", edge); }} />)}
                 </div>
               </MockupStage>
             </div>
