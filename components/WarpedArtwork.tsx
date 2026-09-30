@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { type BlendMode, type MaskPoint, type MaskShape, type SurfaceType } from "@/lib/customization";
 import { finishArtwork } from "@/lib/artworkFinishing";
 import { calculateRenderSize, containImageSize } from "@/lib/renderQuality";
+import { loadCanvasImage } from "@/lib/canvasImages";
+import { curvedSourcePosition, surfaceCurveAngle, surfaceRowScale } from "@/lib/surfaceGeometry";
 
 type Props = {
   src: string | null;
@@ -98,7 +100,7 @@ export function WarpedArtwork({
       workContext.restore();
       context.clearRect(0, 0, width, height);
 
-      if (surface === "flat" || surface === "custom-mask") context.drawImage(work, 0, 0);
+      if (surface === "flat") context.drawImage(work, 0, 0);
       else if (surface === "fabric") {
         if (mapImage) renderMappedFabric(context, work, mapImage, width, height, displacementStrength, fabricBlendStrength);
         else renderProceduralFabric(context, work, width, height, curvature, fabricBlendStrength);
@@ -115,7 +117,9 @@ export function WarpedArtwork({
     return () => { cancelled = true; };
   }, [src, curvature, taper, scale, imageRotation, offsetX, offsetY, surface, precisionWrap, wrapAngle, edgeFade, surfaceMap, displacementStrength, fabricBlendStrength, fabricTextureStrength, surfaceShading, artworkOpacity, opacity, perspective, maskRadius, maskShape, maskPoints, onRenderStateChange, renderSize]);
 
-  return <canvas ref={canvasRef} className="warped-artwork" aria-label="Warped artwork preview" style={{ mixBlendMode: blendMode }} />;
+  // Blend the enclosing positioned layer against the photograph, not inside an
+  // isolated stacking context. Exports use the same mode from this metadata.
+  return <canvas ref={canvasRef} className="warped-artwork" aria-label="Warped artwork preview" data-blend-mode={blendMode} />;
 }
 
 function renderMappedFabric(context: CanvasRenderingContext2D, work: HTMLCanvasElement, mapImage: HTMLImageElement, width: number, height: number, displacementStrength: number, fabricBlendStrength: number) {
@@ -233,8 +237,7 @@ function applyFabricTexture(context: CanvasRenderingContext2D, width: number, he
 function renderCurvedSurface(context: CanvasRenderingContext2D, work: HTMLCanvasElement, width: number, height: number, surface: SurfaceType, curvature: number, taper: number, precisionWrap: boolean, wrapAngle: number, edgeFade: number) {
   const curve = clamp(curvature, 0, 100) / 100;
   const cylindrical = surface === "cylinder" || surface === "tapered-cylinder";
-  const maxAngle = precisionWrap && cylindrical ? (clamp(wrapAngle, 30, 170) * Math.PI) / 360 : 0.15 + curve * 1.15;
-  const sinMax = Math.sin(maxAngle);
+  const maxAngle = surfaceCurveAngle(surface, curvature, precisionWrap, wrapAngle);
   const mapped = document.createElement("canvas");
   mapped.width = width;
   mapped.height = height;
@@ -242,18 +245,19 @@ function renderCurvedSurface(context: CanvasRenderingContext2D, work: HTMLCanvas
   if (!mappedContext) return;
   enableHighQuality(mappedContext);
   const columnStep = Math.max(1, Math.round(width / 420));
-  for (let destinationX = 0; destinationX < width; destinationX += columnStep) {
+  if (maxAngle === 0) mappedContext.drawImage(work, 0, 0);
+  else for (let destinationX = 0; destinationX < width; destinationX += columnStep) {
     const normalized = (destinationX / width) * 2 - 1;
-    const sourceNormalized = Math.asin(clamp(normalized * sinMax, -1, 1)) / maxAngle;
+    const sourceNormalized = curvedSourcePosition(normalized, maxAngle);
     const sourceX = ((sourceNormalized + 1) / 2) * width;
     const edge = Math.abs(normalized);
-    const bow = (precisionWrap ? maxAngle / 1.35 : curve) * edge * edge * 19 * (height / 560);
+    const bow = (precisionWrap && cylindrical ? maxAngle / 1.35 : curve) * edge * edge * 19 * (height / 560);
     mappedContext.drawImage(work, sourceX, 0, columnStep + 1, height, destinationX, bow, columnStep + 1, height - bow * 2);
   }
-  if (surface === "tapered-cylinder" && taper !== 0) {
+  if ((surface === "tapered-cylinder" || surface === "custom-mask") && taper !== 0) {
     const rowStep = Math.max(1, Math.round(height / 420));
     for (let destinationY = 0; destinationY < height; destinationY += rowStep) {
-      const rowScale = 1 + (taper / 100) * (destinationY / height - 0.5) * 0.32;
+      const rowScale = surfaceRowScale(surface, taper, destinationY / height);
       const rowWidth = width * rowScale;
       context.drawImage(mapped, 0, destinationY, width, rowStep + 1, (width - rowWidth) / 2, destinationY, rowWidth, rowStep + 1);
     }
@@ -298,15 +302,6 @@ function applySurfaceShade(context: CanvasRenderingContext2D, width: number, hei
   context.fillStyle = shade;
   context.fillRect(0, 0, width, height);
   context.globalCompositeOperation = "source-over";
-}
-
-function loadCanvasImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Artwork could not be rendered."));
-    image.src = src;
-  });
 }
 
 function makeFabricTexture() {

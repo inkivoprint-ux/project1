@@ -237,6 +237,9 @@ button { color: inherit; }
 .production-output-status { margin-top: 12px; padding: 10px; display: grid; grid-template-columns: 18px 1fr; gap: 8px; color: var(--green); background: #edf4f0; border: 1px solid #cfddd5; }.production-output-status strong, .production-output-status small { display: block; }.production-output-status strong { font-size: 8px; }.production-output-status small { margin-top: 3px; color: #6e7f78; font-size: 7px; line-height: 1.4; }.production-bleed-guide, .production-safe-guide { position: absolute; z-index: 7; pointer-events: none; }.production-bleed-guide { border: 1px dashed #d66f55; }.production-safe-guide { border: 1px dashed rgba(255,255,255,.9); }.production-bleed-guide span, .production-safe-guide span { position: absolute; right: 2px; padding: 1px 3px; color: white; font-size: 5px; font-style: normal; letter-spacing: .08em; }.production-bleed-guide span { top: -10px; background: #b95640; }.production-safe-guide span { bottom: 2px; background: rgba(6,75,63,.82); }
 .template-preview-panel { min-width: 0; display: flex; flex-direction: column; background: #eceeea; }.preview-toolbar { height: 48px; background: #f9faf8; border-bottom: 1px solid #dce1dd; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }.preview-toolbar > div { display: flex; border: 1px solid #d9dfda; }.preview-toolbar button { height: 29px; border: 0; background: white; color: #7b8884; padding: 0 11px; display: flex; align-items: center; gap: 5px; font-size: 7px; cursor: pointer; }.preview-toolbar button:first-child { border-right: 1px solid #d9dfda; }.preview-toolbar button.active { background: var(--green); color: white; }.preview-toolbar button svg { width: 12px; }.preview-toolbar > span { display: flex; align-items: center; gap: 6px; font-size: 7px; text-transform: uppercase; letter-spacing: .1em; color: #71807a; }
 .view-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #ccd5d0; background: white; }
+.template-stage, .customizer-stage { display: flex; align-items: center; justify-content: center; }
+.mockup-coordinate-plane { position: relative; flex: none; overflow: visible; }
+.mockup-coordinate-plane .preview-halo { inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
 .view-switch button { height: 38px; border: 0; border-right: 1px solid #d8ded9; background: transparent; color: #72807b; font-size: 9px; font-weight: 700; cursor: pointer; }
 .view-switch button:last-child { border-right: 0; }
 .view-switch button.active { background: var(--green); color: white; }
@@ -274,6 +277,13 @@ button { color: inherit; }
 }
 
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition-duration: .01ms !important; } }
+
+/* Each artwork layer must blend with the photo, not an isolated transparent parent. */
+.customizer-shell .artwork-window { z-index: auto; overflow: visible; }
+.customizer-shell .mapped-layer { z-index: 4; }
+.customizer-shell .mapped-layer.text-layer { z-index: 5; }
+.customizer-shell .print-boundary { z-index: 6; }
+.customizer-shell .art-placeholder { position: relative; z-index: 4; }
 
 /* Customizer */
 .customizer-shell { min-height: 100vh; background: #f5f2eb; }

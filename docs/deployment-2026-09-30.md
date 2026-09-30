@@ -10,11 +10,11 @@ Updated 30 September 2026. Database setup is complete; the application is not ye
 - The owner created `inkivoprint@gmail.com` in Supabase Auth and entered/submitted the password privately. Its matching profile has role `admin`, confirmed by database read-back. No password is stored in source code.
 - All 15 application tables have row-level security enabled. Anonymous catalogue-edit execution and authenticated access to the server-only rate-limit function are blocked.
 - `product-assets` is public for product imagery; `order-assets` is private for customer artwork.
-- Products and orders are empty. No catalogue publishing, live order submission or WhatsApp message has been performed.
+- Products and orders were empty at initial setup. Subsequent public API inspection confirmed one owner-added product, Loop Steel Everyday Bottle, and its published template. No live order submission or WhatsApp message has been performed by the agent.
 - Vercel project `inkivoprint-4522/project1` is linked to GitHub `inkivoprint-ux/project1`. Next.js is now the saved framework, with `npm ci` installation and Node.js 24.x; the repository root is unchanged. The previous initial deployment contained only a README. A configured application deployment still needs verification.
 - Local Git was initialized with permission and connected to the repository's existing history without replacing project files. The owner authorized GitHub sign-in as `inkivoprint-ux`, and application commit `3f79b0d` was pushed normally to `main`. Unrelated saved accounts and repository history were preserved.
-- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SITE_URL` were saved in Vercel for Production. Supabase API keys have not been entered; no secret was committed or shown in chat. Redeployment is required after adding the keys.
-- Vercel lists application commit `3f79b0d` as Ready, but the existing production address returned Vercel `404 NOT_FOUND` during inspection. This first build preceded the corrected framework/public settings; dashboard Ready alone is not proof of a working storefront. Verify the domain mapping and a fresh Next.js deployment after credentials are added.
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SITE_URL` were saved in Vercel for Production. The owner subsequently entered both Supabase API keys privately; no secret was committed or shown in chat. Initial inspection flagged `SUPABASE_SECRET_KEY` as Config and in Preview as well as Production; the owner was asked to save it as Secret, Production-only. Confirm that adjustment before launch. Do not reveal the value to verify it.
+- The first deployment returned `404 NOT_FOUND`. After the framework correction and owner-entered keys, deployment `E6fhpCwkpa7PRvKgakuBxbFFrf2v` (commit `bd4d93d`) was Ready and the public production origin loaded correctly. The catalogue endpoint returned HTTP 200 against Supabase; signed-out orders returned HTTP 401, and `/admin` showed sign-in. Private server-key/order/storage operations remain unverified.
 
 ## Connection values for Vercel
 
@@ -43,7 +43,7 @@ These files are in `supabase/migrations`. **Do not rerun initial setup or reset 
 
 ## GitHub upload and Vercel deployment
 
-The initial application upload and framework configuration below are complete. Remaining work starts with the API-key entries and a fresh deployment; do not reinitialize Git or replace existing history.
+The initial application upload, framework configuration and API-key entry below are complete. Remaining work includes secret classification, catalogue completion and live acceptance checks; do not reinitialize Git or replace existing history.
 
 1. Authenticate local Git as the Inkivo account with write access to `inkivoprint-ux/project1`. Chrome sign-in does not change saved Git credentials. Preserve unrelated saved accounts.
 2. Review the upload list: include code, public product/font assets, migrations, package lock and docs. Exclude environment secrets, `node_modules`, `.next`, logs and build caches.
@@ -88,8 +88,22 @@ Order requests are bounded to about 4.1 MB including overhead; catalogue JSON is
 
 ## Remaining limitations
 
-Latest local validation after this setup: **72 tests passed across 16 files; type checking, lint and production build passed**. Production browser inspection confirmed no public Admin/tutorial links, no broken storefront images in the inspected page, and a blocked admin workspace when cloud credentials are missing. No warnings/errors were captured in that inspected session. This browser check used unconfigured local production, not a live Supabase-backed checkout.
+Latest local validation after the template/export corrections: **101 tests passed across 21 files; type checking, lint and production build passed**. Earlier production browser inspection confirmed no public Admin/tutorial links, no broken storefront images in the inspected page, and a blocked admin workspace when cloud credentials are missing. That earlier inspection used unconfigured local production, not a live Supabase-backed checkout.
 
 Exports are preview-resolution selected-side artwork, not guaranteed print-ready masters or combined two-sided production files. No payment gateway, live stock reservation or size inventory is implemented. Shipping/payment confirmation remains a WhatsApp workflow. Manufacturing quality needs manual review.
 
-Deployed admin login, cross-device publishing, cloud orders/uploads, received WhatsApp messages and downloads remain unverified until credentials and application deployment are in place. Failed-order recovery, unused public-image cleanup, retention, backups and legal/business policies need operational decisions. Automated SQL tests use isolated PGlite schemas and do not replace live Auth/Storage/runtime checks.
+Agent verification of deployed admin login, cloud orders/uploads, received WhatsApp messages and downloads remains incomplete. The owner has added one shared product and published template, and the deployed public APIs return them. Failed-order recovery, unused public-image cleanup, retention, backups and legal/business policies need operational decisions. Automated SQL tests use isolated PGlite schemas and do not replace live Auth/Storage/runtime checks.
+
+## Responsive template and canvas-export correction
+
+The owner reported different Windows/mobile template alignment, tainted-canvas errors while preparing purchase files, and difficulty leaving Tapered Cylinder mode. The responsive panel previously stretched the percentage print area independently of the contained product photograph. Admin and customer previews now fit the same image-relative plane uniformly inside the panel, including proportional image padding. Detection and fabric-map generation use that same reference. Desktop/Mobile buttons only change preview size, not saved template data.
+
+Existing products, print-area values, template versions, SQL structure and orders are not rewritten by this correction. Older templates were positioned against a variable panel without a stored reference frame, so review their placement once in the corrected editor and publish only after approval. Any adjustment now applies to both desktop and phone. This does not promise identical physical print masters; selected-side preview-output limitations still apply.
+
+All images drawn to export canvases now set `crossOrigin = anonymous` before assigning their source. Supabase's actual public product-image response was checked and permits CORS. A denied image/export fails with an actionable error; it does not pretend an order or file succeeded. Tapered-mode transitions clear the automatic tapered mask/taper when selecting another surface, while preserving intentional shapes, placement, artwork fit and print dimensions.
+
+Custom Mask previously bypassed curved rendering and ignored taper. It now applies both controls before clipping the chosen mask. Zero curvature/taper keeps straight artwork; positive and negative taper are reversible. Artwork finishing previously blended the canvas inside a transparent stacking context, so it did not interact with the photograph. Admin previews now blend the positioned print area, and customer previews blend each photo/text layer independently against the photograph. Export compositing reads the same blend-mode metadata, including safe Normal/source-over fallback. Text-only Normal surface overrides remain independent of photo blending.
+
+Changed files: `components/MockupStage.tsx`, `components/AdminTemplateEditor.tsx`, `components/Customizer.tsx`, `components/WarpedArtwork.tsx`, `app/globals.css`, `lib/mockupGeometry.ts`, `lib/canvasImages.ts`, `lib/templateSurface.ts`, `lib/surfaceGeometry.ts`, `lib/artworkBlend.ts`, `lib/smartMockup.ts`, their five new regression-test files, `README.md`, and this guide. No database migration is needed.
+
+Validation checkpoint: 101 automated tests passed in 21 files; type checking, lint (no warnings) and production build passed. Local browser checks include switching Tapered Cylinder to Cylinder and Flat without resetting or saving a template, Custom Mask curvature/taper controls, and visibly distinct Screen/Multiply blending against the bottle photograph. A 390px customer viewport and desktop viewport use the same image aspect and proportional padding; measured print-area aspect differs by less than 0.01% from subpixel rounding. No existing template was saved, reset or published during these checks. Live remote-image export and post-upload responsive checks must be completed on the deployment containing this correction before claiming that live browser verification passed.

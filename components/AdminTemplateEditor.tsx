@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronDown, Eye, Focus, ImagePlus, Monitor, Move, RotateCcw, Save, SlidersHorizontal, Smartphone, Sparkles, TestTube2, Triangle, Undo2, Upload, ZoomIn } from "lucide-react";
@@ -12,6 +11,8 @@ import { refreshSharedTemplate, saveSharedTemplate } from "@/lib/sharedCatalog";
 import { analyseMockupImage, generateSurfaceMap } from "@/lib/smartMockup";
 import { WarpedArtwork } from "./WarpedArtwork";
 import { AdminNav } from "./AdminNav";
+import { MockupStage } from "./MockupStage";
+import { changeTemplateSurface } from "@/lib/templateSurface";
 
 type DragState =
   | { target: "area"; mode: "move" | "resize"; clientX: number; clientY: number; area: TemplateConfig["area"] }
@@ -64,19 +65,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
   });
   const changeSurface = (surface: SurfaceType) => setTemplate((current) => {
     const currentArea = view === "back" ? current.backArea ?? current.area : current.area;
-    const cylindrical = surface === "cylinder" || surface === "tapered-cylinder";
-    const diameterMm = currentArea.diameterMm ?? product.printArea.diameterMm ?? 75;
-    return replaceArea(current, {
-      ...currentArea,
-      surface,
-      precisionWrap: cylindrical,
-      diameterMm: cylindrical ? diameterMm : currentArea.diameterMm,
-      wrapAngle: cylindrical ? wrapAngleFor(currentArea.widthMm, diameterMm) : currentArea.wrapAngle,
-      displacementStrength: surface === "fabric" ? currentArea.displacementStrength || 62 : currentArea.displacementStrength,
-      fabricBlendStrength: surface === "fabric" ? currentArea.fabricBlendStrength || 48 : currentArea.fabricBlendStrength,
-      fabricTextureStrength: surface === "fabric" ? currentArea.fabricTextureStrength || 18 : currentArea.fabricTextureStrength,
-      maskShape: surface === "tapered-cylinder" && (!currentArea.maskShape || currentArea.maskShape === "rectangle" || currentArea.maskShape === "tapered") ? "tapered" : currentArea.maskShape,
-    });
+    return replaceArea(current, changeTemplateSurface(currentArea, surface, product.printArea.diameterMm ?? 75));
   });
 
   function handleArtwork(event: ChangeEvent<HTMLInputElement>) {
@@ -113,8 +102,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
     setDetecting(true);
     setNotice("Scanning product shape and surface…");
     try {
-      const bounds = stage.getBoundingClientRect();
-      const suggestion = await analyseMockupImage(src, area.surface, bounds.width, bounds.height);
+      const suggestion = await analyseMockupImage(src, area.surface);
       const suggestedArea = {
         ...area,
         x: suggestion.x,
@@ -131,7 +119,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
         maskPoints: suggestion.surface === "custom-mask" ? (area.maskPoints?.length ? area.maskPoints : [{ x: 8, y: 8 }, { x: 92, y: 8 }, { x: 96, y: 50 }, { x: 88, y: 94 }, { x: 12, y: 94 }, { x: 4, y: 50 }]) : [],
       };
       if (suggestion.surface === "fabric") {
-        suggestedArea.surfaceMap = await generateSurfaceMap(src, suggestedArea, bounds.width, bounds.height);
+        suggestedArea.surfaceMap = await generateSurfaceMap(src, suggestedArea);
         suggestedArea.displacementStrength = area.displacementStrength ?? 62;
         suggestedArea.fabricBlendStrength = area.fabricBlendStrength ?? 48;
         suggestedArea.fabricTextureStrength = area.fabricTextureStrength ?? 18;
@@ -154,8 +142,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
     setDetecting(true);
     setNotice("Reading folds, shadows, and highlights…");
     try {
-      const bounds = stage.getBoundingClientRect();
-      const map = await generateSurfaceMap(mockupSrc, area, bounds.width, bounds.height);
+      const map = await generateSurfaceMap(mockupSrc, area);
       updateArea("surfaceMap", map);
       if (!area.displacementStrength) updateArea("displacementStrength", 62);
       setNotice("Product-specific surface map generated");
@@ -267,7 +254,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
   async function persist(publish: boolean) { if (saving || !ready) return; setSaving(true); try { const saved = await saveSharedTemplate(product, template, publish); setTemplate(saved); setNotice(publish ? `Published version ${saved.version}` : "Draft saved · customer version unchanged"); } catch (error) { setNotice(error instanceof Error ? error.message : "Template could not be saved. Try smaller mockup files."); } finally { setSaving(false); } }
   function restore() { try { setTemplate(hasSupabaseConfiguration() ? createDefaultTemplate(product) : resetTemplate(product)); setNotice("Default draft restored · publish to update customers"); } catch { setNotice("Template could not be reset."); } }
 
-  const areaStyle = { left: `${area.x}%`, top: `${area.y}%`, width: `${area.width}%`, height: `${area.height}%`, transform: `rotate(${area.rotation}deg)` };
+  const areaStyle = { left: `${area.x}%`, top: `${area.y}%`, width: `${area.width}%`, height: `${area.height}%`, transform: `rotate(${area.rotation}deg)`, mixBlendMode: area.blendMode };
   const cylindricalSurface = area.surface === "cylinder" || area.surface === "tapered-cylinder";
   const bleedX = clamp((area.bleedMm / Math.max(1, area.widthMm)) * 100, 0, 25);
   const bleedY = clamp((area.bleedMm / Math.max(1, area.heightMm)) * 100, 0, 25);
@@ -375,15 +362,14 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
           <section className="template-preview-panel">
             <div className="preview-toolbar"><div><button className={viewport === "desktop" ? "active" : ""} onClick={() => setViewport("desktop")}><Monitor /> Desktop</button><button className={viewport === "mobile" ? "active" : ""} onClick={() => setViewport("mobile")}><Smartphone /> Mobile</button></div><span><Eye size={14} /> Customer preview</span></div>
             <div className={`template-stage-frame ${viewport}`}>
-              <div className="template-stage" ref={stageRef}>
-                <Image src={mockupSrc} alt={`${product.name} ${productView.label}`} width={1024} height={1536} priority unoptimized={mockupSrc.startsWith("data:")} className="template-product-image" />
+              <MockupStage key={mockupSrc} src={mockupSrc} alt={`${product.name} ${productView.label}`} className="template-stage" imageClassName="template-product-image" stageRef={stageRef}>
                 <div className={`editable-print-area editing-${editTarget}`} style={areaStyle} onPointerDown={(e) => editTarget === "mask" ? addMaskPoint(e) : beginDrag(e, "move")} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
                   <WarpedArtwork src={artwork} curvature={area.curvature} perspective={area.perspective} taper={area.taper} opacity={area.opacity} blendMode={area.blendMode} maskRadius={area.maskRadius} maskShape={area.maskShape} maskPoints={area.maskPoints} surface={area.surface} precisionWrap={area.precisionWrap} wrapAngle={area.wrapAngle} edgeFade={area.edgeFade} surfaceMap={area.surfaceMap} displacementStrength={area.displacementStrength} fabricBlendStrength={area.fabricBlendStrength} fabricTextureStrength={area.fabricTextureStrength} scale={area.defaultArtworkScale ?? 1} imageRotation={area.defaultArtworkRotation ?? 0} offsetX={area.defaultArtworkOffsetX ?? 0} offsetY={area.defaultArtworkOffsetY ?? 0} />
                   {editTarget === "mask" && <><div className="mask-outline" style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} />{area.maskShape === "custom" && (area.maskPoints ?? []).map((point, index) => <i key={`${point.x}-${point.y}-${index}`} className="mask-point" style={{ left: `${point.x}%`, top: `${point.y}%` }}><b>{index + 1}</b></i>)}</>}
                   {editTarget === "area" && <><div className="production-bleed-guide" style={{ left: `${-bleedX}%`, right: `${-bleedX}%`, top: `${-bleedY}%`, bottom: `${-bleedY}%` }}><span>BLEED</span></div><div className="production-safe-guide" style={{ left: `${safeX}%`, right: `${safeX}%`, top: `${safeY}%`, bottom: `${safeY}%` }}><span>SAFE</span></div></>}
                   <span className="area-tag">{editTarget === "artwork" ? "Drag artwork" : editTarget === "mask" ? area.maskShape === "custom" ? "Click to draw mask" : `${area.maskShape ?? "rectangle"} mask` : area.name}</span>{editTarget === "area" && <i className="resize-handle" onPointerDown={(e) => { e.stopPropagation(); beginDrag(e, "resize", "area"); }} />}
                 </div>
-              </div>
+              </MockupStage>
             </div>
             <div className="template-preview-foot"><div><strong>{product.name} · {productView.label}</strong><small>{area.surface.replace("-", " ")} · {area.widthMm} × {area.heightMm} mm · {area.targetDpi} DPI</small></div><button onClick={() => uploadRef.current?.click()}><ImagePlus size={15} /> Replace test image</button></div>
             <input ref={uploadRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleArtwork} />

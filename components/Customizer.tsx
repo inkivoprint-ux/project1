@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import localFont from "next/font/local";
 import { ArrowLeft, Check, Eye, EyeOff, Focus, ImagePlus, RotateCcw, ShoppingBag, Sparkles, Trash2, Type, Upload, ZoomIn } from "lucide-react";
@@ -18,9 +17,12 @@ import { generateSurfaceMap } from "@/lib/smartMockup";
 import { getTextStyle, getTextSurfaceOverrides, type TextFont, type TextSurface } from "@/lib/textCustomization";
 import { BrandLogo } from "./BrandLogo";
 import { WarpedArtwork } from "./WarpedArtwork";
+import { canvasBlendOperation } from "@/lib/artworkBlend";
 import { BuyNowCheckout } from "./BuyNowCheckout";
 import { QuantitySelector } from "./QuantitySelector";
 import { SizeQuantitySelector } from "./SizeQuantitySelector";
+import { MockupStage } from "./MockupStage";
+import { loadCanvasImage, exportCanvasBlob } from "@/lib/canvasImages";
 
 type ActiveLayer = "image" | "text";
 type DragState = { layer: ActiveLayer; pointerX: number; pointerY: number; originX: number; originY: number } | null;
@@ -78,6 +80,7 @@ export function Customizer({ product }: { product: Product }) {
   const [message, setMessage] = useState("");
   const [template, setTemplate] = useState(() => createDefaultTemplate(product));
   const [templateReady, setTemplateReady] = useState(!hasSupabaseConfiguration());
+  const [loadedMockup, setLoadedMockup] = useState("");
   const [automaticSurfaceMap, setAutomaticSurfaceMap] = useState<string | undefined>();
   const fileRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -140,8 +143,7 @@ export function Customizer({ product }: { product: Product }) {
       return;
     }
     let cancelled = false;
-    const bounds = stageRef.current.getBoundingClientRect();
-    generateSurfaceMap(mockupSrc, area, bounds.width, bounds.height, 12)
+    generateSurfaceMap(mockupSrc, area)
       .then((map) => { if (!cancelled) setAutomaticSurfaceMap(map); })
       .catch(() => { if (!cancelled) setAutomaticSurfaceMap(undefined); });
     return () => { cancelled = true; };
@@ -246,7 +248,7 @@ export function Customizer({ product }: { product: Product }) {
   }
 
   async function purchase(action: "cart" | "buy-now") {
-    if (!templateReady || !purchaseContextReady || purchaseBusyRef.current || waitingForTextFont || waitingForTextRender || waitingForImageRender) return;
+    if (!templateReady || loadedMockup !== mockupSrc || !purchaseContextReady || purchaseBusyRef.current || waitingForTextFont || waitingForTextRender || waitingForImageRender) return;
     try { createProductPurchaseEntries(product, quantity, sizeQuantities); }
     catch (failure) { setMessage(failure instanceof Error ? failure.message : "Choose your size and quantity."); return; }
     const requestedDesign = Boolean((template.tools.images && imageUrl) || (template.tools.text && text.trim()));
@@ -333,24 +335,23 @@ export function Customizer({ product }: { product: Product }) {
             <span>Live realistic preview · {productView.label}</span>
             <button className={showBoundary ? "active" : ""} onClick={() => setShowBoundary((visible) => !visible)}>{showBoundary ? <EyeOff size={13} /> : <Eye size={13} />}{showBoundary ? "Hide guides" : "Show print area"}</button>
           </div>
-          <div className="customizer-stage" ref={stageRef}>
+          <MockupStage key={mockupSrc} src={mockupSrc} alt={`${product.name} ${productView.label}`} className="customizer-stage" imageClassName="customizer-product" stageRef={stageRef} onReady={setLoadedMockup} onError={() => setMessage("The product image could not be loaded safely. Reload before ordering.")}>
             <div className="preview-halo" />
-            <Image src={mockupSrc} alt={`${product.name} ${productView.label}`} fill sizes="(max-width: 980px) 100vw, 70vw" preload unoptimized={mockupSrc.startsWith("data:")} className="customizer-product" />
             <div
               ref={artworkRef}
               className={`artwork-window ${hasDesign ? "has-design" : ""} active-${effectiveActiveLayer}`}
-              style={{ left: `${area.x}%`, top: `${area.y}%`, width: `${area.width}%`, height: `${area.height}%`, transform: `rotate(${area.rotation}deg)` }}
+              style={{ left: `${area.x}%`, top: `${area.y}%`, width: `${area.width}%`, height: `${area.height}%` }}
               onPointerDown={beginDrag}
               onPointerMove={moveDrag}
               onPointerUp={endDrag}
               onPointerCancel={endDrag}
             >
-              {template.tools.images && imageUrl && <div className={`mapped-layer image-layer ${effectiveActiveLayer === "image" ? "selected" : ""}`}><WarpedArtwork src={imageUrl} {...mappedProps} onRenderStateChange={setImageRenderState} scale={imageScale} imageRotation={imageRotation} offsetX={imageX} offsetY={imageY} /></div>}
-              {template.tools.text && textArtwork && <div className={`mapped-layer text-layer ${effectiveActiveLayer === "text" ? "selected" : ""}`}><WarpedArtwork src={textArtwork} {...textMappedProps} artworkOpacity={textOpacity / 100} onRenderStateChange={setTextRenderState} scale={1} imageRotation={textRotation} offsetX={textX} offsetY={textY} /></div>}
+              {template.tools.images && imageUrl && <div className={`mapped-layer image-layer ${effectiveActiveLayer === "image" ? "selected" : ""}`} style={{ mixBlendMode: mappedProps.blendMode, transform: `rotate(${area.rotation}deg)` }}><WarpedArtwork src={imageUrl} {...mappedProps} onRenderStateChange={setImageRenderState} scale={imageScale} imageRotation={imageRotation} offsetX={imageX} offsetY={imageY} /></div>}
+              {template.tools.text && textArtwork && <div className={`mapped-layer text-layer ${effectiveActiveLayer === "text" ? "selected" : ""}`} style={{ mixBlendMode: textMappedProps.blendMode, transform: `rotate(${area.rotation}deg)` }}><WarpedArtwork src={textArtwork} {...textMappedProps} artworkOpacity={textOpacity / 100} onRenderStateChange={setTextRenderState} scale={1} imageRotation={textRotation} offsetX={textX} offsetY={textY} /></div>}
               {!hasDesign && <div className="art-placeholder"><ImagePlus size={20} /><span>Add photo or text</span></div>}
             </div>
             {(showBoundary || !hasDesign) && <div className="print-boundary" style={{ left: `${area.x}%`, top: `${area.y}%`, width: `${area.width}%`, height: `${area.height}%`, transform: `rotate(${area.rotation}deg)` }} aria-hidden="true"><i style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} /><span>PRINT AREA</span></div>}
-          </div>
+          </MockupStage>
           <div className="live-preview-status"><span><Sparkles size={13} /> {area.surface === "fabric" ? surfaceMap ? "Photoshop-style fabric mapping active" : "Preparing wrinkle map…" : area.precisionWrap ? "Live cylindrical wrap active" : "Live surface mapping active"}</span><span>{template.tools.allowMove ? "Drag the selected layer directly on the product" : "Layer position is locked by this product template"}</span></div>
         </section>
 
@@ -402,8 +403,8 @@ export function Customizer({ product }: { product: Product }) {
           <div className="print-quality"><Check /><div><strong>{area.surface === "fabric" ? "Wrinkle-mapped fabric preview" : area.precisionWrap ? "Precision cylindrical preview" : "Mapped product preview"}</strong><small>{area.widthMm} × {area.heightMm} mm · target {area.targetDpi} DPI · {productView.label} · preview only</small></div></div>
           {isTShirt ? <SizeQuantitySelector quantities={sizeQuantities} onChange={setSizeQuantities} disabled={savingToCart} /> : <QuantitySelector quantity={quantity} onChange={setQuantity} disabled={savingToCart} />}
           <p className="purchase-note">{requirePersonalisation && !hasDesign ? "Add a photo or text to order with personalisation." : hasDesign ? "Your design will be applied to each item in this quantity." : "No artwork added: this item will be ordered without personalisation."}{purchaseIntent === "buy-now" && " When your design is ready, choose Buy now below."}</p>
-          <div className="customizer-actions"><button className="reset-button" onClick={reset}><RotateCcw size={16} /> Reset</button>{added ? <Link className="add-cart-button added" href="/?cart=open"><ShoppingBag /> View your cart</Link> : <button className="add-cart-button" disabled={!templateReady || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("cart")}><ShoppingBag /> {savingToCart || (waitingForTextRender && textRenderState === "rendering") || (waitingForImageRender && imageRenderState === "rendering") ? "Preparing files…" : `Add to cart · ${formatPrice(product.price * selectedQuantity)}`}</button>}</div>
-          <button className="button customizer-buy-now" disabled={!templateReady || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("buy-now")}>{savingToCart ? "Preparing files…" : `Buy now · ${formatPrice(product.price * selectedQuantity)}`}</button>
+          <div className="customizer-actions"><button className="reset-button" onClick={reset}><RotateCcw size={16} /> Reset</button>{added ? <Link className="add-cart-button added" href="/?cart=open"><ShoppingBag /> View your cart</Link> : <button className="add-cart-button" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("cart")}><ShoppingBag /> {savingToCart || (waitingForTextRender && textRenderState === "rendering") || (waitingForImageRender && imageRenderState === "rendering") ? "Preparing files…" : `Add to cart · ${formatPrice(product.price * selectedQuantity)}`}</button>}</div>
+          <button className="button customizer-buy-now" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("buy-now")}>{savingToCart ? "Preparing files…" : `Buy now · ${formatPrice(product.price * selectedQuantity)}`}</button>
           {message && <p className="editor-message" role="status">{message}</p>}
           </fieldset>
         </aside>
@@ -449,10 +450,6 @@ function readImageDimensions(src: string) {
   });
 }
 
-function canvasBlob(canvas: HTMLCanvasElement) {
-  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
-}
-
 async function exportArtworkBlob(artwork: HTMLDivElement) {
   const layers = Array.from(artwork.querySelectorAll("canvas"));
   if (!layers.length) return null;
@@ -463,8 +460,8 @@ async function exportArtworkBlob(artwork: HTMLDivElement) {
   output.height = height;
   const context = output.getContext("2d");
   if (!context) return null;
-  for (const layer of layers) { context.globalCompositeOperation = layer.style.mixBlendMode === "normal" ? "source-over" : layer.style.mixBlendMode as GlobalCompositeOperation; context.drawImage(layer, 0, 0, width, height); }
-  return canvasBlob(output);
+  for (const layer of layers) { context.globalCompositeOperation = canvasBlendOperation(layer.dataset.blendMode); context.drawImage(layer, 0, 0, width, height); }
+  return exportCanvasBlob(output);
 }
 
 async function exportProductPreview(stage: HTMLDivElement, artwork: HTMLDivElement, mockupSrc: string, areaRotation: number) {
@@ -477,8 +474,9 @@ async function exportProductPreview(stage: HTMLDivElement, artwork: HTMLDivEleme
   if (!context) return null;
   context.fillStyle = "#e6e2d9";
   context.fillRect(0, 0, output.width, output.height);
-  const mockup = await loadPreviewImage(mockupSrc);
-  const padding = 12 * scale;
+  const mockup = await loadCanvasImage(mockupSrc, "The product image could not be loaded for export. Reload and try again.");
+  const imageElement = stage.querySelector("img");
+  const padding = (imageElement ? Number.parseFloat(getComputedStyle(imageElement).paddingLeft) || 0 : 0) * scale;
   const ratio = Math.min((output.width - padding * 2) / mockup.naturalWidth, (output.height - padding * 2) / mockup.naturalHeight);
   const productWidth = mockup.naturalWidth * ratio;
   const productHeight = mockup.naturalHeight * ratio;
@@ -491,16 +489,7 @@ async function exportProductPreview(stage: HTMLDivElement, artwork: HTMLDivEleme
   context.save();
   context.translate(x + width / 2, y + height / 2);
   context.rotate((areaRotation * Math.PI) / 180);
-  for (const layer of Array.from(artwork.querySelectorAll("canvas"))) { context.globalCompositeOperation = layer.style.mixBlendMode === "normal" ? "source-over" : layer.style.mixBlendMode as GlobalCompositeOperation; context.drawImage(layer, -width / 2, -height / 2, width, height); }
+  for (const layer of Array.from(artwork.querySelectorAll("canvas"))) { context.globalCompositeOperation = canvasBlendOperation(layer.dataset.blendMode); context.drawImage(layer, -width / 2, -height / 2, width, height); }
   context.restore();
-  return canvasBlob(output);
-}
-
-function loadPreviewImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new window.Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Product preview could not be exported."));
-    image.src = src;
-  });
+  return exportCanvasBlob(output);
 }

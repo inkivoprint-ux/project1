@@ -2,7 +2,7 @@
 
 A responsive, premium custom-product storefront and the foundation for Inkivo's versioned product-personalisation platform.
 
-**Current launch status:** the real Supabase database and first administrator were configured on 30 September 2026. The application was uploaded to GitHub, and Vercel's Next.js framework, install command and public Production addresses were configured. Supabase API credentials, catalogue publishing and deployed end-to-end verification remain outstanding. See [deployment instructions and current status](docs/deployment-2026-09-30.md). Earlier audit documents describe historical checkpoints.
+**Current launch status:** the real Supabase database and first administrator were configured on 30 September 2026. The application is uploaded to GitHub and loads on Vercel after owner-entered API keys. The public cloud catalogue connection and signed-out order protection were verified; one owner-added product and its published template are present. Full authenticated checkout/file verification and completion of the catalogue remain outstanding. See [deployment instructions and current status](docs/deployment-2026-09-30.md). Earlier audit documents describe historical checkpoints.
 
 ## Included
 
@@ -12,6 +12,7 @@ A responsive, premium custom-product storefront and the foundation for Inkivo's 
 - Admin dashboard at `/admin` with a visual, draggable product-template editor.
 - Separate draft/published templates with test-artwork replacement, physical print settings and per-product customer-tool controls; shared through Supabase when configured.
 - Canvas-based cylindrical artwork warping with curvature, taper, perspective, mask, opacity and blend controls.
+- One image-relative template coordinate plane shared by desktop/mobile admin and customer previews; no separate mobile template is required. Canvas image loads request anonymous CORS access before loading remote product artwork.
 - Data-driven product/print-area definitions.
 - Supabase browser/server clients and a normalized initial migration with RLS.
 - Private order-file storage model and immutable asset lineage.

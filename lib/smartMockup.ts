@@ -1,4 +1,6 @@
 import type { BlendMode, SurfaceType, TemplateArea } from "./customization";
+import { loadCanvasImage } from "./canvasImages";
+import { mockupFrame, MOCKUP_REFERENCE_PADDING } from "./mockupGeometry";
 
 export type PixelImage = {
   width: number;
@@ -134,8 +136,9 @@ export function suggestSmartArea(
   };
 }
 
-export async function analyseMockupImage(src: string, surface: SurfaceType, stageWidth: number, stageHeight: number) {
-  const image = await loadImage(src);
+export async function analyseMockupImage(src: string, surface: SurfaceType, stageWidth?: number, stageHeight?: number) {
+  const image = await loadCanvasImage(src, "The mockup image could not be analysed. Check image access and try again.");
+  const frame = mockupFrame(image.naturalWidth, image.naturalHeight);
   const maxDimension = 900;
   const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
   const width = Math.max(1, Math.round(image.naturalWidth * scale));
@@ -147,17 +150,19 @@ export async function analyseMockupImage(src: string, surface: SurfaceType, stag
   if (!context) throw new Error("Canvas analysis is unavailable in this browser.");
   context.drawImage(image, 0, 0, width, height);
   const pixels = context.getImageData(0, 0, width, height);
-  return suggestSmartArea(pixels, surface, stageWidth, stageHeight);
+  return suggestSmartArea(pixels, surface, stageWidth ?? frame.width, stageHeight ?? frame.height, MOCKUP_REFERENCE_PADDING);
 }
 
 export async function generateSurfaceMap(
   src: string,
   area: Pick<TemplateArea, "x" | "y" | "width" | "height">,
-  stageWidth: number,
-  stageHeight: number,
+  suppliedWidth?: number,
+  suppliedHeight?: number,
   stagePadding = 12,
 ) {
-  const image = await loadImage(src);
+  const image = await loadCanvasImage(src, "The surface-map image could not be loaded safely. Reload and try again.");
+  const frame = mockupFrame(image.naturalWidth, image.naturalHeight);
+  const stageWidth = suppliedWidth ?? frame.width, stageHeight = suppliedHeight ?? frame.height;
   const contentWidth = Math.max(1, stageWidth - stagePadding * 2);
   const contentHeight = Math.max(1, stageHeight - stagePadding * 2);
   const scale = Math.min(contentWidth / image.naturalWidth, contentHeight / image.naturalHeight);
@@ -203,13 +208,4 @@ export async function generateSurfaceMap(
   }
   context.putImageData(pixels, 0, 0);
   return canvas.toDataURL("image/webp", 0.88);
-}
-
-function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("The mockup image could not be analysed."));
-    image.src = src;
-  });
 }
