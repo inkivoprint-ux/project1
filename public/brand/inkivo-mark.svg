@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 382 406" role="img" aria-labelledby="title">
+  <title id="title">Inkivo</title>
+  <g fill="#003C32">
+    <circle cx="34" cy="34" r="34"/>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M56 351A191 191 0 0 1 0 216 191 191 0 0 1 191 25a191 191 0 0 1 191 191 191 191 0 0 1-56 135l-38-38a137 137 0 0 0 40-97A137 137 0 0 0 191 79 137 137 0 0 0 54 216a137 137 0 0 0 40 97Z"/>
+    <path d="M115 390V231c0-40 34-72 76-72s76 32 76 72v159c-48 21-104 21-152 0Z"/>
+  </g>
+</svg>

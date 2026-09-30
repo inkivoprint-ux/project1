@@ -1,0 +1,91 @@
+import { readFile } from "node:fs/promises";
+import { PGlite } from "@electric-sql/pglite";
+import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { products } from "./products";
+import { createDefaultTemplate } from "./customization";
+
+// Real PostgreSQL engine, isolated in memory. Minimal external Supabase schemas
+// provide migration dependencies; this is not a live Auth/Storage service test.
+let db: PGlite;
+const adminId = "10000000-0000-4000-8000-000000000001";
+const customerId = "10000000-0000-4000-8000-000000000002";
+async function role(name: "authenticated" | "anon" | "service_role", user = "") {
+  await db.exec("reset role");
+  await db.query("select set_config('request.jwt.claim.sub', $1, false)", [user]);
+  await db.exec(`set role ${name}`);
+}
+beforeAll(async () => {
+  db = await PGlite.create({ extensions: { pgcrypto } });
+  await db.exec(`
+    create role anon; create role authenticated; create role service_role bypassrls;
+    create schema auth; create schema storage;
+    grant usage on schema public, auth, storage to anon, authenticated, service_role;
+    alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+    create table auth.users(id uuid primary key, raw_user_meta_data jsonb default '{}');
+    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+    create table storage.buckets(id text primary key, name text, public boolean);
+    create table storage.objects(id uuid primary key, bucket_id text, name text);
+    alter table storage.objects enable row level security;
+    create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:cardinality(string_to_array(name, '/'))-1] $$;
+  `);
+  for (const name of ["202609290001_initial_schema.sql", "202609300001_admin_profile_access.sql", "202609300002_order_management.sql", "202609300003_shared_catalogue.sql", "202609300004_order_safety.sql"]) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
+  await db.query("insert into auth.users(id) values($1),($2)", [adminId, customerId]);
+  await db.query("update public.profiles set role='admin' where id=$1", [adminId]);
+  await role("authenticated", adminId);
+  await db.query("select public.save_storefront_product($1::jsonb)", [JSON.stringify({ ...products[0], displayOrder: 1 })]);
+}, 30_000);
+afterEach(async () => { await db.exec("reset role"); });
+afterAll(async () => { await db?.close(); });
+
+describe("actual migration SQL and permission boundaries", () => {
+  it("applies every migration and enables RLS on the new tables", async () => {
+    const result = await db.query<{ relname: string; relrowsecurity: boolean }>("select relname, relrowsecurity from pg_class where relname in ('storefront_templates','order_submission_limits')");
+    expect(result.rows).toHaveLength(2); expect(result.rows.every((row) => row.relrowsecurity)).toBe(true);
+  });
+  it("rejects ordinary users and anonymous catalogue/template mutations", async () => {
+    await role("authenticated", customerId);
+    await expect(db.query("select public.save_storefront_product($1::jsonb)", [JSON.stringify(products[1])])).rejects.toThrow("Administrator access required");
+    await expect(db.query("select public.save_storefront_template($1, $2::jsonb, true)", [products[0].slug, JSON.stringify(createDefaultTemplate(products[0]))])).rejects.toThrow("Administrator access required");
+    await role("anon");
+    await expect(db.query("select public.save_storefront_product($1::jsonb)", [JSON.stringify(products[1])])).rejects.toThrow("permission denied");
+  });
+  it("saves authoritative prices and shifts positions atomically", async () => {
+    await role("authenticated", adminId);
+    await db.query("select public.save_storefront_product($1::jsonb)", [JSON.stringify({ ...products[1], displayOrder: 1 })]);
+    const result = await db.query<{ slug: string; price: string; position: string }>("select slug, coalesce(offer_price,base_price)::text as price, storefront_config->>'displayOrder' as position from public.products order by (storefront_config->>'displayOrder')::int");
+    expect(result.rows.map((row) => row.slug)).toEqual([products[1].slug, products[0].slug]);
+    expect(result.rows.map((row) => row.position)).toEqual(["1", "2"]);
+    expect(Number(result.rows[0].price)).toBe(products[1].price);
+    await expect(db.query("select public.save_storefront_product($1::jsonb)", [JSON.stringify({ ...products[1], id: "changed-identity", displayOrder: 2 })])).rejects.toThrow("identity cannot be changed");
+  });
+  it("keeps drafts and retired versions hidden while publishing one customer version", async () => {
+    await role("authenticated", adminId);
+    const template = createDefaultTemplate(products[0]);
+    const published = await db.query<{ config: { version: number } }>("select public.save_storefront_template($1, $2::jsonb, true) as config", [products[0].slug, JSON.stringify(template)]);
+    await db.query("select public.save_storefront_template($1, $2::jsonb, false)", [products[0].slug, JSON.stringify({ ...template, area: { ...template.area, opacity: .2 } })]);
+    await role("anon");
+    const visible = await db.query<{ status: string; config: { version: number; area: { opacity: number } } }>("select status, config from public.storefront_templates");
+    expect(visible.rows).toHaveLength(1); expect(visible.rows[0].status).toBe("published");
+    expect(visible.rows[0].config.version).toBe(published.rows[0].config.version);
+    expect(visible.rows[0].config.area.opacity).toBe(template.area.opacity);
+    await role("authenticated", adminId);
+    await db.query("select public.save_storefront_template($1, $2::jsonb, true)", [products[0].slug, JSON.stringify(template)]);
+    await role("anon"); expect((await db.query("select status from public.storefront_templates")).rows).toEqual([{ status: "published" }]);
+  });
+  it("prevents customers from promoting themselves or reading another profile", async () => {
+    await role("authenticated", customerId);
+    expect((await db.query("update public.profiles set role='admin' where id=auth.uid() returning id")).rows).toEqual([]);
+    expect((await db.query("select public.is_admin() as admin")).rows).toEqual([{ admin: false }]);
+    expect((await db.query("select id from public.profiles where id<>auth.uid()")).rows).toEqual([]);
+  });
+  it("limits attempts in PostgreSQL and restricts the limiter to the server role", async () => {
+    await role("anon"); await expect(db.query("select public.consume_order_attempt('fixture')")).rejects.toThrow("permission denied");
+    await role("service_role");
+    for (let index = 0; index < 8; index++) expect((await db.query("select public.consume_order_attempt('fixture') as allowed")).rows).toEqual([{ allowed: true }]);
+    expect((await db.query("select public.consume_order_attempt('fixture') as allowed")).rows).toEqual([{ allowed: false }]);
+    await db.exec("reset role");
+    await db.exec("update public.order_submission_limits set window_started = now() - interval '11 minutes'");
+    await role("service_role"); expect((await db.query("select public.consume_order_attempt('fixture') as allowed")).rows).toEqual([{ allowed: true }]);
+  });
+});
