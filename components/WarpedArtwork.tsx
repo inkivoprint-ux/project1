@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { type BlendMode, type MaskPoint, type MaskShape, type SurfaceType } from "@/lib/customization";
+import { type BlendMode, type MaskPoint, type MaskShape, type SurfaceType, type TemplateArea } from "@/lib/customization";
+import { applyOverlayStrength, previewBlendMode } from "@/lib/artworkBlend";
 import { adjustArtworkPixels } from "@/lib/artworkColor";
 import { finishArtwork } from "@/lib/artworkFinishing";
 import { calculateRenderSize, containImageSize } from "@/lib/renderQuality";
@@ -16,6 +17,9 @@ type Props = {
   taper: number;
   opacity: number;
   blendMode: BlendMode;
+  overlayStrength?: number;
+  mockupSrc?: string;
+  backdropArea?: Pick<TemplateArea, "x" | "y" | "width" | "height" | "rotation">;
   brightness?: number;
   contrast?: number;
   saturation?: number;
@@ -48,6 +52,7 @@ export function WarpedArtwork({
   src, curvature, perspective, taper, opacity, blendMode, maskRadius, maskShape = "rectangle", maskPoints = EMPTY_MASK_POINTS, surface,
   precisionWrap = false, wrapAngle = 110, edgeFade = 0, surfaceMap,
   displacementStrength = 55, fabricBlendStrength = 48, fabricTextureStrength = 18,
+  overlayStrength = 100, mockupSrc, backdropArea,
   brightness = 100, contrast = 100, saturation = 100,
   deformationIntensity, verticalDeformation,
   surfaceShading = true, artworkOpacity = 1, onRenderStateChange,
@@ -96,11 +101,12 @@ export function WarpedArtwork({
       return pending;
     };
     // Keep only this layer's source and map, avoiding repeated image decoding on slider input.
-    for (const key of imageCache.current.keys()) if (key !== src && key !== surfaceMap) imageCache.current.delete(key);
+    for (const key of imageCache.current.keys()) if (key !== src && key !== surfaceMap && key !== mockupSrc) imageCache.current.delete(key);
     Promise.all([
       cachedImage(src),
       surface === "fabric" && surfaceMap ? cachedImage(surfaceMap).catch(() => null) : Promise.resolve(null),
-    ]).then(([image, mapImage]) => {
+      blendMode === "overlay" && overlayStrength > 0 && overlayStrength < 100 && mockupSrc ? cachedImage(mockupSrc) : Promise.resolve(null),
+    ]).then(([image, mapImage, productImage]) => {
       if (cancelled) return;
       const work = document.createElement("canvas");
       work.width = width;
@@ -133,6 +139,31 @@ export function WarpedArtwork({
       } else renderCurvedSurface(context, work, width, height, surface, curvature, taper, precisionWrap, wrapAngle, edgeFade, deformationIntensity, verticalDeformation);
 
       if (surface !== "fabric" && surfaceShading) applySurfaceShade(context, width, height, curvature);
+      if (productImage && backdropArea) {
+        const stage = canvas.closest(".mockup-coordinate-plane") as HTMLElement | null;
+        if (!stage) throw new Error("The product preview is unavailable.");
+        const photograph = stage.querySelector("img");
+        const padding = photograph ? parseFloat(getComputedStyle(photograph).paddingLeft) || 0 : 0;
+        const frameWidth = stage.clientWidth;
+        const frameHeight = stage.clientHeight;
+        const ratio = Math.min((frameWidth - padding * 2) / productImage.naturalWidth, (frameHeight - padding * 2) / productImage.naturalHeight);
+        const productWidth = productImage.naturalWidth * ratio;
+        const productHeight = productImage.naturalHeight * ratio;
+        const areaWidth = frameWidth * backdropArea.width / 100;
+        const areaHeight = frameHeight * backdropArea.height / 100;
+        const backdrop = document.createElement("canvas");
+        backdrop.width = width; backdrop.height = height;
+        const background = backdrop.getContext("2d", { willReadFrequently: true });
+        if (!background) throw new Error("Overlay rendering is unavailable.");
+        background.scale(width / Math.max(1, areaWidth), height / Math.max(1, areaHeight));
+        background.translate(areaWidth / 2, areaHeight / 2);
+        background.rotate(-backdropArea.rotation * Math.PI / 180);
+        background.translate(-frameWidth * backdropArea.x / 100 - areaWidth / 2, -frameHeight * backdropArea.y / 100 - areaHeight / 2);
+        background.drawImage(productImage, (frameWidth - productWidth) / 2, (frameHeight - productHeight) / 2, productWidth, productHeight);
+        const pixels = context.getImageData(0, 0, width, height);
+        applyOverlayStrength(pixels.data, background.getImageData(0, 0, width, height).data, overlayStrength);
+        context.putImageData(pixels, 0, 0);
+      }
       // Masks, perspective and opacity must be pixels, not preview-only CSS.
       finishArtwork(context, canvas, { opacity: opacity * artworkOpacity, perspective, maskRadius, maskShape, maskPoints });
       onRenderStateChange?.("ready");
@@ -140,11 +171,11 @@ export function WarpedArtwork({
       if (!cancelled) { context.clearRect(0, 0, width, height); onRenderStateChange?.("error"); }
     });
     return () => { cancelled = true; };
-  }, [src, curvature, taper, scale, imageRotation, offsetX, offsetY, surface, precisionWrap, wrapAngle, edgeFade, surfaceMap, displacementStrength, fabricBlendStrength, fabricTextureStrength, brightness, contrast, saturation, surfaceShading, deformationIntensity, verticalDeformation, artworkOpacity, opacity, perspective, maskRadius, maskShape, maskPoints, onRenderStateChange, renderSize]);
+  }, [src, curvature, taper, scale, imageRotation, offsetX, offsetY, surface, precisionWrap, wrapAngle, edgeFade, surfaceMap, displacementStrength, fabricBlendStrength, fabricTextureStrength, blendMode, overlayStrength, mockupSrc, backdropArea, brightness, contrast, saturation, surfaceShading, deformationIntensity, verticalDeformation, artworkOpacity, opacity, perspective, maskRadius, maskShape, maskPoints, onRenderStateChange, renderSize]);
 
   // Blend the enclosing positioned layer against the photograph, not inside an
   // isolated stacking context. Exports use the same mode from this metadata.
-  return <canvas ref={canvasRef} className="warped-artwork" aria-label="Warped artwork preview" data-blend-mode={blendMode} />;
+  return <canvas ref={canvasRef} className="warped-artwork" aria-label="Warped artwork preview" data-blend-mode={previewBlendMode(blendMode, overlayStrength)} />;
 }
 
 function renderMappedFabric(context: CanvasRenderingContext2D, work: HTMLCanvasElement, mapImage: HTMLImageElement, width: number, height: number, displacementStrength: number, fabricBlendStrength: number, deformationIntensity?: number) {

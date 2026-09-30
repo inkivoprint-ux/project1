@@ -24,6 +24,7 @@ export type TemplateArea = {
   maskPoints?: MaskPoint[];
   opacity: number;
   blendMode: BlendMode;
+  overlayStrength?: number;
   brightness?: number;
   contrast?: number;
   saturation?: number;
@@ -230,6 +231,7 @@ export function validateTemplate(config: TemplateConfig) {
   for (const area of [config.area, config.backArea].filter((value): value is TemplateArea => Boolean(value))) {
     if (area.maskShape !== undefined && !isMaskShape(area.maskShape)) throw new Error("Choose a supported print mask shape.");
     if ([area.brightness, area.contrast, area.saturation].some((value) => value !== undefined && (!Number.isFinite(value) || value < 0 || value > 200))) throw new Error("Colour adjustments must be between 0% and 200%.");
+    if (area.overlayStrength !== undefined && (!Number.isFinite(area.overlayStrength) || area.overlayStrength < 0 || area.overlayStrength > 100)) throw new Error("Overlay strength must be between 0% and 100%.");
     const values = [area.x, area.y, area.width, area.height, area.rotation, area.curvature, area.perspective, area.taper, area.opacity, area.widthMm, area.heightMm, area.targetDpi, area.bleedMm, area.safeMarginMm];
     if (!values.every(Number.isFinite) || area.x < 0 || area.y < 0 || area.width <= 0 || area.height <= 0 || area.x + area.width > 100.01 || area.y + area.height > 100.01 || area.widthMm <= 0 || area.heightMm <= 0 || area.targetDpi < 72 || area.targetDpi > 1200 || area.bleedMm < 0 || area.safeMarginMm < 0 || area.opacity < 0 || area.opacity > 1 || !["flat", "perspective", "cylinder", "tapered-cylinder", "custom-mask", "fabric"].includes(area.surface) || (area.maskPoints ?? []).some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y) || point.x < 0 || point.x > 100 || point.y < 0 || point.y > 100)) {
       throw new Error("Check the print area: placement must fit the product, physical dimensions must be positive, and DPI must be 72–1200.");

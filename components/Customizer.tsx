@@ -17,7 +17,7 @@ import { generateSurfaceMap } from "@/lib/smartMockup";
 import { DEFAULT_TEXT_DEFORMATION, getTextStyle, getTextSurfaceOverrides, type TextFont, type TextSurface } from "@/lib/textCustomization";
 import { BrandLogo } from "./BrandLogo";
 import { WarpedArtwork } from "./WarpedArtwork";
-import { canvasBlendOperation } from "@/lib/artworkBlend";
+import { canvasBlendOperation, previewBlendMode } from "@/lib/artworkBlend";
 import { BuyNowCheckout } from "./BuyNowCheckout";
 import { QuantitySelector } from "./QuantitySelector";
 import { SizeQuantitySelector } from "./SizeQuantitySelector";
@@ -307,6 +307,9 @@ export function Customizer({ product }: { product: Product }) {
     taper: area.taper,
     opacity: area.opacity,
     blendMode: area.blendMode,
+    overlayStrength: area.overlayStrength,
+    mockupSrc,
+    backdropArea: area,
     brightness: area.brightness,
     contrast: area.contrast,
     saturation: area.saturation,
@@ -349,8 +352,8 @@ export function Customizer({ product }: { product: Product }) {
               onPointerUp={endDrag}
               onPointerCancel={endDrag}
             >
-              {template.tools.images && imageUrl && <div className={`mapped-layer image-layer ${effectiveActiveLayer === "image" ? "selected" : ""}`} style={{ mixBlendMode: mappedProps.blendMode, transform: `rotate(${area.rotation}deg)` }}><WarpedArtwork src={imageUrl} {...mappedProps} onRenderStateChange={setImageRenderState} scale={imageScale} imageRotation={imageRotation} offsetX={imageX} offsetY={imageY} /></div>}
-              {template.tools.text && textArtwork && <div className={`mapped-layer text-layer ${effectiveActiveLayer === "text" ? "selected" : ""}`} style={{ mixBlendMode: textMappedProps.blendMode, transform: `rotate(${area.rotation}deg)` }}><WarpedArtwork src={textArtwork} {...textMappedProps} artworkOpacity={textOpacity / 100} onRenderStateChange={setTextRenderState} scale={1} imageRotation={textRotation} offsetX={textX} offsetY={textY} /></div>}
+              {template.tools.images && imageUrl && <div className={`mapped-layer image-layer ${effectiveActiveLayer === "image" ? "selected" : ""}`} style={{ mixBlendMode: previewBlendMode(mappedProps.blendMode, mappedProps.overlayStrength), transform: `rotate(${area.rotation}deg)` }}><WarpedArtwork src={imageUrl} {...mappedProps} onRenderStateChange={setImageRenderState} scale={imageScale} imageRotation={imageRotation} offsetX={imageX} offsetY={imageY} /></div>}
+              {template.tools.text && textArtwork && <div className={`mapped-layer text-layer ${effectiveActiveLayer === "text" ? "selected" : ""}`} style={{ mixBlendMode: previewBlendMode(textMappedProps.blendMode, textMappedProps.overlayStrength), transform: `rotate(${area.rotation}deg)` }}><WarpedArtwork src={textArtwork} {...textMappedProps} artworkOpacity={textOpacity / 100} onRenderStateChange={setTextRenderState} scale={1} imageRotation={textRotation} offsetX={textX} offsetY={textY} /></div>}
               {!hasDesign && <div className="art-placeholder"><ImagePlus size={20} /><span>Add photo or text</span></div>}
             </div>
             {(showBoundary || !hasDesign) && <div className="print-boundary" style={{ left: `${area.x}%`, top: `${area.y}%`, width: `${area.width}%`, height: `${area.height}%`, transform: `rotate(${area.rotation}deg)` }} aria-hidden="true"><i style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} /><span>PRINT AREA</span></div>}
