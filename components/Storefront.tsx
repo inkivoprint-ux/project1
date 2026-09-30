@@ -2,10 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, Gift, Heart, Mail, Phone, RotateCcw, SearchX, ShieldCheck, Sparkles, Truck } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { addCartItem, cartItemCount, loadCart, removeCartItem, subscribeToCart, updateCartItem, updateCartItemSize, type CartEntry } from "@/lib/cart";
-import { isTShirtCategory } from "@/lib/productSizes";
+import { ArrowLeft, ArrowRight, Check, Gift, Heart, Mail, Phone, RotateCcw, SearchX, ShieldCheck, Sparkles, Truck } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { cartItemCount, loadCart, removeCartItem, subscribeToCart, updateCartItem, updateCartItemSize, type CartEntry } from "@/lib/cart";
 import { filterProducts, loadAllProducts, subscribeToProductCatalog } from "@/lib/productCatalog";
 import { formatPrice, products, type Product } from "@/lib/products";
 import { Header } from "./Header";
@@ -16,6 +15,8 @@ import { hasSupabaseConfiguration } from "@/lib/supabase/config";
 import { refreshSharedProducts } from "@/lib/sharedCatalog";
 
 export function Storefront({ initialProducts = products }: { initialProducts?: Product[] }) {
+  const productGridRef = useRef<HTMLDivElement>(null);
+  const slideProducts = (direction: number) => { const grid = productGridRef.current; if (grid) grid.scrollBy({ left: direction * grid.clientWidth, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); };
   const [cart, setCart] = useState<CartEntry[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [category, setCategory] = useState("All gifts");
@@ -97,20 +98,19 @@ export function Storefront({ initialProducts = products }: { initialProducts?: P
             {categories.map((item) => <button key={item} aria-pressed={category === item} className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{item}</button>)}
           </div></>}
           {searching && <div className="shop-search-summary" role="status" aria-live="polite"><span><strong>{visibleProducts.length}</strong> {visibleProducts.length === 1 ? "product" : "products"} matching “{searchQuery}”</span><button onClick={() => setSearchQuery("")}>Clear search</button></div>}
-          <div className="product-grid">
+          {visibleProducts.length > 4 && <div className="product-slider-controls"><span>Swipe to browse more gifts</span><button type="button" aria-label="Previous products" onClick={() => slideProducts(-1)}><ArrowLeft size={18} /></button><button type="button" aria-label="Next products" onClick={() => slideProducts(1)}><ArrowRight size={18} /></button></div>}
+          <div ref={productGridRef} key={`${category}:${searchQuery}`} className={`product-grid${visibleProducts.length > 4 ? " product-grid-slider" : ""}`}>
             {visibleProducts.map((product) => (
               <article className="product-card" key={product.id}>
-                <div className="product-image-wrap">
-                  {product.badge && <span className="product-badge">{product.badge}</span>}
-                  <Link href={`/products/${product.slug}`} className="product-detail-image-link" aria-label={`View ${product.name} details`}><Image src={product.image} alt={product.name} width={1024} height={1536} sizes="(max-width: 560px) 90vw, (max-width: 1150px) 45vw, 25vw" className="product-image" unoptimized={product.image.startsWith("data:")} /></Link>
-                  <Link href={`/customize/${product.slug}`} className="quick-customize">Personalise this <ArrowRight size={16} /></Link>
-                </div>
-                <div className="product-meta">
-                  <p>{product.category}</p>
-                  <div className="product-title-row"><h3><Link href={`/products/${product.slug}`}>{product.name}</Link></h3></div>
-                  <small>{product.finish}</small>
-                  <div className="price-row"><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}{isTShirtCategory(product.category) ? <Link className="choose-product-size" href={`/products/${product.slug}`}>Choose sizes <ArrowRight size={14} /></Link> : <button onClick={() => { setCart(addCartItem(product.id)); setCartOpen(true); }}><Check size={14} /> Quick add</button>}</div>
-                </div>
+                <Link href={`/products/${product.slug}`} className="product-card-link" aria-label={`View ${product.name} details`}>
+                  <div className="product-image-wrap">
+                    <Image src={product.image} alt={product.name} width={1024} height={1536} sizes="(max-width: 600px) 45vw, (max-width: 900px) 30vw, 25vw" className="product-image" unoptimized={product.image.startsWith("data:")} />
+                  </div>
+                  <div className="product-meta">
+                    <div className="product-title-row"><h3 title={product.name}>{product.name.split(/\s+/).slice(0, 4).join(" ")}{product.name.split(/\s+/).length > 4 ? "…" : ""}</h3></div>
+                    <div className="price-row"><strong>{formatPrice(product.price)}</strong></div>
+                  </div>
+                </Link>
               </article>
             ))}
             {visibleProducts.length === 0 && <div className="product-search-empty"><SearchX size={30} /><h3>No matching products</h3><p>Try a different product name, category, or finish.</p><button onClick={() => { setSearchQuery(""); setCategory("All gifts"); }}>Show all products</button></div>}
