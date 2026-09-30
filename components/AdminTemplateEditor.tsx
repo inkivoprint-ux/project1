@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, Eye, ImagePlus, Monitor, Move, RotateCcw, Save, SlidersHorizontal, Smartphone, Sparkles, TestTube2, Triangle, Undo2, Upload } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Eye, EyeOff, ImagePlus, Monitor, Move, RotateCcw, Save, SlidersHorizontal, Smartphone, Sparkles, TestTube2, Triangle, Undo2, Upload } from "lucide-react";
 import { getMaskPolygon, MASK_PRESETS } from "@/lib/maskShapes";
 import { Product } from "@/lib/products";
 import { createDefaultTemplate, loadTemplate, maskClipPath, resetTemplate, type MaskShape, SurfaceType, TemplateArea, TemplateConfig } from "@/lib/customization";
@@ -26,6 +26,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
   const [template, setTemplate] = useState(() => createDefaultTemplate(product));
   const [artwork, setArtwork] = useState<string>("/brand/inkivo-symbol.png");
   const [tab, setTab] = useState<"placement" | "surface" | "effects" | "tools">("placement");
+  const [showPrintGuides, setShowPrintGuides] = useState(true);
   const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
   const [view, setView] = useState<"front" | "back">("front");
   const [editTarget, setEditTarget] = useState<"area" | "artwork" | "mask">("artwork");
@@ -273,14 +274,14 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
           </aside>
 
           <section className="template-preview-panel">
-            <div className="preview-toolbar"><div><button className={viewport === "desktop" ? "active" : ""} onClick={() => setViewport("desktop")}><Monitor /> Desktop</button><button className={viewport === "mobile" ? "active" : ""} onClick={() => setViewport("mobile")}><Smartphone /> Mobile</button></div><span><Eye size={14} /> Customer preview</span></div>
+            <div className="preview-toolbar"><div><button className={viewport === "desktop" ? "active" : ""} onClick={() => setViewport("desktop")}><Monitor /> Desktop</button><button className={viewport === "mobile" ? "active" : ""} onClick={() => setViewport("mobile")}><Smartphone /> Mobile</button></div><button type="button" className="print-guides-toggle" aria-pressed={showPrintGuides} aria-label="Show print guides" onClick={() => { endDrag(); setShowPrintGuides((visible) => !visible); }}>{showPrintGuides ? <EyeOff size={14} /> : <Eye size={14} />}{showPrintGuides ? "Hide print guides" : "Show print guides"}</button></div>
             <div className={`template-stage-frame ${viewport}`}>
               <MockupStage key={mockupSrc} src={mockupSrc} alt={`${product.name} ${productView.label}`} className="template-stage" imageClassName="template-product-image" stageRef={stageRef}>
-                <div className={`editable-print-area editing-${editTarget}`} style={areaStyle} onPointerDown={(e) => editTarget === "mask" ? addMaskPoint(e) : beginDrag(e, "move")} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
+                <div className={`editable-print-area editing-${editTarget}${showPrintGuides ? "" : " guides-hidden"}`} style={areaStyle} onPointerDown={(e) => editTarget === "mask" ? addMaskPoint(e) : beginDrag(e, "move")} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
                   <WarpedArtwork src={artwork} curvature={area.curvature} perspective={area.perspective} taper={area.taper} opacity={area.opacity} blendMode={area.blendMode} maskRadius={area.maskRadius} maskShape={area.maskShape} maskPoints={area.maskPoints} surface={area.surface} precisionWrap={area.precisionWrap} wrapAngle={area.wrapAngle} edgeFade={area.edgeFade} surfaceMap={area.surfaceMap} displacementStrength={area.displacementStrength} fabricBlendStrength={area.fabricBlendStrength} fabricTextureStrength={area.fabricTextureStrength} scale={area.defaultArtworkScale ?? 1} imageRotation={area.defaultArtworkRotation ?? 0} offsetX={area.defaultArtworkOffsetX ?? 0} offsetY={area.defaultArtworkOffsetY ?? 0} />
-                  {editTarget === "mask" && <><div className="mask-outline" style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} />{area.maskShape === "custom" && (area.maskPoints ?? []).map((point, index) => <i key={`${point.x}-${point.y}-${index}`} className="mask-point" style={{ left: `${point.x}%`, top: `${point.y}%` }}><b>{index + 1}</b></i>)}</>}
-                  {editTarget === "area" && <><div className="production-bleed-guide" style={{ left: `${-bleedX}%`, right: `${-bleedX}%`, top: `${-bleedY}%`, bottom: `${-bleedY}%` }}><span>BLEED</span></div><div className="production-safe-guide" style={{ left: `${safeX}%`, right: `${safeX}%`, top: `${safeY}%`, bottom: `${safeY}%` }}><span>SAFE</span></div></>}
-                  <span className="area-tag">{editTarget === "artwork" ? "Drag artwork" : editTarget === "mask" ? area.maskShape === "custom" ? "Click to draw mask" : `${area.maskShape ?? "rectangle"} mask` : area.name}</span>{editTarget === "area" && resizeEdges.map((edge) => <button key={edge} type="button" aria-label={`Resize print area ${edge}`} className={`resize-handle resize-${edge}`} onPointerDown={(e) => { e.stopPropagation(); beginDrag(e, "resize", "area", edge); }} />)}
+                  {showPrintGuides && editTarget === "mask" && <><div className="mask-outline" style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} />{area.maskShape === "custom" && (area.maskPoints ?? []).map((point, index) => <i key={`${point.x}-${point.y}-${index}`} className="mask-point" style={{ left: `${point.x}%`, top: `${point.y}%` }}><b>{index + 1}</b></i>)}</>}
+                  {showPrintGuides && editTarget === "area" && <><div className="production-bleed-guide" style={{ left: `${-bleedX}%`, right: `${-bleedX}%`, top: `${-bleedY}%`, bottom: `${-bleedY}%` }}><span>BLEED</span></div><div className="production-safe-guide" style={{ left: `${safeX}%`, right: `${safeX}%`, top: `${safeY}%`, bottom: `${safeY}%` }}><span>SAFE</span></div></>}
+                  {showPrintGuides && <span className="area-tag">{editTarget === "artwork" ? "Drag artwork" : editTarget === "mask" ? area.maskShape === "custom" ? "Click to draw mask" : `${area.maskShape ?? "rectangle"} mask` : area.name}</span>}{showPrintGuides && editTarget === "area" && resizeEdges.map((edge) => <button key={edge} type="button" aria-label={`Resize print area ${edge}`} className={`resize-handle resize-${edge}`} onPointerDown={(e) => { e.stopPropagation(); beginDrag(e, "resize", "area", edge); }} />)}
                 </div>
               </MockupStage>
             </div>

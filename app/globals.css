@@ -320,3 +320,10 @@ button { color: inherit; }
 .resize-nw { left: 0; top: 0; cursor: nwse-resize; }
 
 .text-effect-slider input[type="range"] { min-height: 36px; width: 100%; cursor: pointer; }
+
+.editable-print-area.guides-hidden { border-color: transparent; outline: none; pointer-events: none; }
+.editable-print-area.guides-hidden::after { display: none; }
+.preview-toolbar .print-guides-toggle { min-height: 34px; height: auto; border: 1px solid #d9dfda; color: var(--green); font-size: 11px; }
+@media (max-width: 760px) {
+  .preview-toolbar { height: auto; min-height: 48px; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+}
