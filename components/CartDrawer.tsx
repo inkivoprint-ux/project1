@@ -83,11 +83,12 @@ export function CartDrawer({ open, cart, products, onClose, onQuantity, onRemove
         </div>
         <footer><div><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></div><small>Shipping is calculated when your order is confirmed.</small>
           {error && <p className="cart-error" role="alert"><CircleAlert /> {error}</p>}
-          {checkoutOpen ? <form className="cart-checkout-fields" onSubmit={submitOrder}>
+          {checkoutOpen ? <form className="cart-checkout-fields" onSubmit={submitOrder} aria-busy={submitting}>
             <label><span>Name</span><input required maxLength={160} value={customerName} onChange={(event) => setCustomerName(event.target.value)} autoComplete="name" /></label>
             <label><span>WhatsApp number</span><input required type="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" /></label>
             <label><span>Delivery address</span><textarea required maxLength={2000} value={address} onChange={(event) => setAddress(event.target.value)} autoComplete="street-address" /></label>
-            <button type="submit" disabled={submitting}>{submitting ? "Saving order files…" : <>Save order & open WhatsApp <ArrowRight /></>}</button>
+            {submitting && <p className="checkout-saving-message" role="status" aria-live="polite">Please wait a moment while we save your order and artwork files. WhatsApp will open when everything is ready.</p>}
+            <button type="submit" disabled={submitting}>{submitting ? "Saving… Please wait" : <>Save order & open WhatsApp <ArrowRight /></>}</button>
           </form> : <button className="cart-whatsapp-button" onClick={() => setCheckoutOpen(true)}>Order on WhatsApp <ArrowRight /></button>}
           <button onClick={onClose}>Continue shopping</button></footer>
       </> : <div className="cart-empty"><ShoppingBag /><h3>Your cart is empty</h3><p>Add a product and it will appear here.</p><button onClick={onClose}>Continue shopping</button></div>}

@@ -396,3 +396,5 @@ button { color: inherit; }
 .editable-print-area .mask-point:active { cursor: grabbing; }
 .editable-print-area .mask-point::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; }
 .editable-print-area .mask-point:focus-visible { outline: 2px solid #f0ae51; outline-offset: 3px; }
+
+.checkout-saving-message { padding: 12px 14px; margin: 8px 0; background: #edf4ee; color: var(--green); font-size: 13px; line-height: 1.5; border-radius: 8px; }
