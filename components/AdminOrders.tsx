@@ -4,7 +4,7 @@ import Image from "next/image";
 import { CheckCircle2, CircleAlert, Download, FileImage, LoaderCircle, PackageCheck, RotateCcw, ShoppingBag, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatPrice } from "@/lib/products";
-import { deleteOrderAsset, loadAdminOrders, loadDesignDraft, loadOrders, manageOrder, subscribeToOrders, type OrderAsset, type OrderRecord } from "@/lib/orders";
+import { deleteOrderAsset, loadAdminOrders, loadDesignDraft, loadOrders, manageOrder, permanentlyDeleteOrder, subscribeToOrders, type OrderAsset, type OrderRecord } from "@/lib/orders";
 import type { OrderManagementAction } from "@/lib/orderManagement";
 import { useDialog } from "@/lib/useDialog";
 
@@ -29,7 +29,7 @@ export function AdminOrders({ onCount }: { onCount?: (count: number) => void }) 
 
   const visibleOrders = orders.filter((order) => Boolean(order.deletedAt) === showTrash);
   return <section className="admin-orders" id="orders">
-    <header><div><span className="admin-kicker">ORDER WORKSPACE</span><h2>{showTrash ? "Order Trash" : "Recent WhatsApp orders"}</h2><p>{showTrash ? "Deleted orders and files are retained. Restore an order to return it to the workspace." : "Mark finished work completed, then delete it to Trash. Cloud mode shows the latest 200 records."}</p></div><button type="button" onClick={refresh}>Refresh orders</button></header>
+    <header><div><span className="admin-kicker">ORDER WORKSPACE</span><h2>{showTrash ? "Order Trash" : "Recent WhatsApp orders"}</h2><p>{showTrash ? "Restore a trashed order, or delete it permanently to remove its records and artwork files and free storage." : "Mark finished work completed, then delete it to Trash. Cloud mode shows the latest 200 records."}</p></div><button type="button" onClick={refresh}>Refresh orders</button></header>
     <div className="order-view-tabs" role="group" aria-label="Order list"><button type="button" aria-pressed={!showTrash} onClick={() => setShowTrash(false)}>Orders ({orders.filter((order) => !order.deletedAt).length})</button><button type="button" aria-pressed={showTrash} onClick={() => setShowTrash(true)}><Trash2 size={15} /> Trash ({orders.filter((order) => order.deletedAt).length})</button></div>
     {!visibleOrders.length && <div className="admin-card admin-empty"><ShoppingBag /><h2>{showTrash ? "Trash is empty" : "No active orders"}</h2><p>{showTrash ? "Deleted completed orders will appear here." : "Saved checkout orders will appear here. Deleted orders can be restored from Trash."}</p></div>}
     {visibleOrders.map((order) => <article className="admin-order-card" key={order.id}>
@@ -49,23 +49,23 @@ export function AdminOrders({ onCount }: { onCount?: (count: number) => void }) 
 function OrderManagementControls({ order, onChanged }: { order: OrderRecord; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [pendingAction, setPendingAction] = useState<"complete" | "delete" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"complete" | "delete" | "purge" | null>(null);
   const confirmRef = useDialog(Boolean(pendingAction), () => setPendingAction(null));
-  const change = async (action: OrderManagementAction) => {
+  const change = async (action: OrderManagementAction | "purge") => {
     if (busy) return;
     setPendingAction(null);
     setBusy(true); setError("");
-    try { await manageOrder(order, action); onChanged(); }
+    try { if (action === "purge") await permanentlyDeleteOrder(order); else await manageOrder(order, action); onChanged(); }
     catch (failure) { setError(failure instanceof Error ? failure.message : "The order could not be updated."); }
     finally { setBusy(false); }
   };
   return <div className="order-management">
-    <span className={`order-work-status ${order.completedAt ? "completed" : ""}`}>{order.completedAt ? <CheckCircle2 size={16} /> : <PackageCheck size={16} />}{order.deletedAt ? "In Trash · files retained" : order.completedAt ? "Work completed" : "Work in progress"}</span>
-    <div>{order.deletedAt ? <button type="button" disabled={busy} onClick={() => change("restore")}><RotateCcw size={16} /> Restore order</button> : order.completedAt ? <><button type="button" disabled={busy} onClick={() => change("reopen")}><RotateCcw size={16} /> Reopen order</button><button type="button" className="order-delete-button" disabled={busy} onClick={() => setPendingAction("delete")}><Trash2 size={16} /> Delete order</button></> : <button type="button" disabled={busy} onClick={() => setPendingAction("complete")}><CheckCircle2 size={16} /> Mark completed</button>}{busy && <span role="status">Saving…</span>}</div>
+    <span className={`order-work-status ${order.completedAt ? "completed" : ""}`}>{order.completedAt ? <CheckCircle2 size={16} /> : <PackageCheck size={16} />}{order.deletedAt ? order.purgeStarted ? "Permanent deletion started · retry to finish" : "In Trash · files retained" : order.completedAt ? "Work completed" : "Work in progress"}</span>
+    <div>{order.deletedAt ? <>{!order.purgeStarted && <button type="button" disabled={busy} onClick={() => change("restore")}><RotateCcw size={16} /> Restore order</button>}<button type="button" className="order-delete-button" disabled={busy} onClick={() => setPendingAction("purge")}><Trash2 size={16} /> Delete permanently</button></> : order.completedAt ? <><button type="button" disabled={busy} onClick={() => change("reopen")}><RotateCcw size={16} /> Reopen order</button><button type="button" className="order-delete-button" disabled={busy} onClick={() => setPendingAction("delete")}><Trash2 size={16} /> Delete order</button></> : <button type="button" disabled={busy} onClick={() => setPendingAction("complete")}><CheckCircle2 size={16} /> Mark completed</button>}{busy && <span role="status">Saving…</span>}</div>
     {error && <p role="alert">{error}</p>}
     {pendingAction && <div ref={confirmRef} className="product-modal" role="dialog" aria-modal="true" aria-labelledby={`order-confirm-${order.id}`}>
       <button className="product-modal-scrim" tabIndex={-1} type="button" aria-label="Cancel order action" onClick={() => setPendingAction(null)} />
-      <div className="order-confirm-panel"><span className="admin-kicker">{order.orderNumber}</span><h2 id={`order-confirm-${order.id}`}>{pendingAction === "complete" ? "Finished the work?" : "Move this order to Trash?"}</h2><p>{pendingAction === "complete" ? "Mark the order completed only after finishing the work. You can reopen it if needed." : "The completed order will leave your active list. Its records and files will be retained, and you can restore it from Trash."}</p><div><button data-dialog-focus type="button" onClick={() => setPendingAction(null)}>Cancel</button><button type="button" className="admin-primary" onClick={() => change(pendingAction)}>{pendingAction === "complete" ? "Confirm completed" : "Move to Trash"}</button></div></div>
+      <div className="order-confirm-panel"><span className="admin-kicker">{order.orderNumber}</span><h2 id={`order-confirm-${order.id}`}>{pendingAction === "purge" ? "Permanently delete this order?" : pendingAction === "complete" ? "Finished the work?" : "Move this order to Trash?"}</h2><p>{pendingAction === "purge" ? "This removes the order, its customer details, and all associated artwork files from storage. This cannot be undone." : pendingAction === "complete" ? "Mark the order completed only after finishing the work. You can reopen it if needed." : "The completed order will leave your active list. Its records and files will be retained, and you can restore it from Trash."}</p><div><button data-dialog-focus type="button" onClick={() => setPendingAction(null)}>Cancel</button><button type="button" className="admin-primary" onClick={() => change(pendingAction)}>{pendingAction === "purge" ? "Delete permanently" : pendingAction === "complete" ? "Confirm completed" : "Move to Trash"}</button></div></div>
     </div>}
   </div>;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { transitionOrder } from "./orderManagement";
+import { assertOrderCanBePurged, transitionOrder } from "./orderManagement";
 import { parseSavedOrder, type OrderRecord } from "./orders";
 
 const order: OrderRecord = { id: "unit-order", orderNumber: "unit-reference", customerName: "", phone: "", address: "", subtotal: 1, status: "local", storageMode: "local", createdAt: "2026-09-30T00:00:00.000Z", items: [{ productId: "unit-product", productName: "", quantity: 1, unitPrice: 1, assets: [{ kind: "preview", fileName: "unit-preview.png", mimeType: "image/png" }] }] };
@@ -31,4 +31,12 @@ describe("completed-order management", () => {
     expect(() => transitionOrder(deleted, "complete", now)).toThrow("Restore this order");
     expect(() => transitionOrder(deleted, "delete", now)).toThrow("Restore this order");
   });
+});
+
+it("allows permanent deletion only for completed orders in Trash", () => {
+  expect(() => assertOrderCanBePurged(order)).toThrow("Only completed orders in Trash");
+  const completed = transitionOrder(order, "complete", now);
+  expect(() => assertOrderCanBePurged(completed)).toThrow();
+  expect(() => assertOrderCanBePurged({ ...order, deletedAt: now })).toThrow();
+  expect(() => assertOrderCanBePurged(transitionOrder(completed, "delete", now))).not.toThrow();
 });

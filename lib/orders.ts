@@ -3,7 +3,7 @@ import type { Product } from "./products";
 import { assertOrderUploadBudget, parseOrderPayload } from "./orderSubmission";
 import { hasSupabaseConfiguration } from "./supabase/config";
 import { z } from "zod";
-import { transitionOrder, type OrderManagementAction } from "./orderManagement";
+import { assertOrderCanBePurged, transitionOrder, type OrderManagementAction } from "./orderManagement";
 import { assertProductSize, T_SHIRT_SIZES, type TShirtSize } from "./productSizes";
 
 export type AssetKind = "original" | "edited" | "preview";
@@ -15,7 +15,7 @@ export type OrderItemRecord = { productId: string; productName: string; quantity
 export type OrderRecord = {
   id: string; orderNumber: string; customerName: string; phone: string; address: string; subtotal: number;
   status: "submitted" | "local"; storageMode: "supabase" | "local"; createdAt: string; items: OrderItemRecord[];
-  completedAt?: string; deletedAt?: string;
+  completedAt?: string; deletedAt?: string; purgeStarted?: boolean;
 };
 
 const DATABASE_NAME = "inkivo-order-assets";
@@ -30,7 +30,7 @@ const savedOrderSchema = z.object({
   id: z.string().min(1), orderNumber: z.string().min(1), customerName: z.string(), phone: z.string(), address: z.string(),
   subtotal: z.number().finite().nonnegative(), status: z.enum(["submitted", "local"]), storageMode: z.enum(["supabase", "local"]),
   createdAt: z.string().datetime({ offset: true }),
-  completedAt: z.string().datetime({ offset: true }).optional(), deletedAt: z.string().datetime({ offset: true }).optional(),
+  completedAt: z.string().datetime({ offset: true }).optional(), deletedAt: z.string().datetime({ offset: true }).optional(), purgeStarted: z.boolean().optional(),
   items: z.array(z.object({
     productId: z.string().min(1), productName: z.string(), quantity: z.number().int().min(1).max(99), unitPrice: z.number().finite().nonnegative(),
     designId: z.string().optional(), configuration: z.record(z.unknown()).optional(),
@@ -120,6 +120,31 @@ export async function manageOrder(order: OrderRecord, action: OrderManagementAct
   const saved = loadOrders();
   persistOrders(saved.map((item) => item.id === next.id ? next : item), next);
   return next;
+}
+
+export async function permanentlyDeleteOrder(order: OrderRecord) {
+  assertOrderCanBePurged(order);
+  if (order.storageMode === "supabase") {
+    const response = await fetch("/api/orders/manage", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id, action: "purge" }) });
+    const result = await response.json() as { permanentlyDeleted?: boolean; error?: string };
+    if (!response.ok || !result.permanentlyDeleted) throw new Error(result.error || "The order could not be permanently deleted.");
+  }
+  const remaining = loadOrders().filter((item) => item.id !== order.id);
+  const retainedDrafts = new Set(remaining.flatMap((item) => item.items.flatMap((line) => [line.designId, ...line.assets.map((asset) => asset.designId)])));
+  const drafts = new Set(order.items.flatMap((item) => [item.designId, ...item.assets.map((asset) => asset.designId)]).filter((id): id is string => Boolean(id) && !retainedDrafts.has(id)));
+  if (drafts.size) {
+    const database = await openDraftDatabase();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction(DRAFT_STORE, "readwrite");
+        for (const id of drafts) transaction.objectStore(DRAFT_STORE).delete(id);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    } finally { database.close(); }
+  }
+  persistOrders(remaining);
 }
 
 function saveOrder(order: OrderRecord) {

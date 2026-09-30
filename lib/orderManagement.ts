@@ -16,3 +16,7 @@ export function transitionOrder(order: OrderRecord, action: OrderManagementActio
   if (!order.completedAt) throw new Error("Mark the order completed before deleting it.");
   return { ...order, deletedAt: now };
 }
+
+export function assertOrderCanBePurged(order: OrderRecord) {
+  if (!order.deletedAt || !order.completedAt) throw new Error("Only completed orders in Trash can be permanently deleted.");
+}

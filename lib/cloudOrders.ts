@@ -8,7 +8,7 @@ export type CloudOrderRow = {
 };
 
 export function cloudOrderRecord(row: CloudOrderRow): OrderRecord {
-  return { id: row.id, orderNumber: row.order_number, customerName: row.customer_name, phone: row.phone, address: row.shipping_address?.address ?? "", subtotal: Number(row.subtotal), createdAt: row.created_at, completedAt: row.completed_at ?? (row.state === "completed" ? row.updated_at ?? row.created_at : undefined), deletedAt: row.deleted_at ?? undefined, status: "submitted", storageMode: "supabase", items: row.order_items.map((item) => {
+  return { id: row.id, orderNumber: row.order_number, customerName: row.customer_name, phone: row.phone, address: row.shipping_address?.address ?? "", subtotal: Number(row.subtotal), createdAt: row.created_at, completedAt: row.completed_at ?? (row.state === "completed" ? row.updated_at ?? row.created_at : undefined), deletedAt: row.deleted_at ?? undefined, purgeStarted: Boolean(row.deleted_at && row.state === "processing"), status: "submitted", storageMode: "supabase", items: row.order_items.map((item) => {
     const customization = item.order_customizations[0];
     const state = customization?.editable_state;
     const designId = typeof state?.designId === "string" ? state.designId : undefined;
