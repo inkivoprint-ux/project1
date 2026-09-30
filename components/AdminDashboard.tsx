@@ -1,5 +1,7 @@
 "use client";
 
+import { showSuccess } from "@/lib/notifications";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, CircleAlert, Clock3, ImagePlus, Layers3, PackageOpen, Pencil, Plus, Search, Upload, X } from "lucide-react";
@@ -99,6 +101,7 @@ export function AdminDashboard() {
       if (cloud) await saveSharedProduct(product); else saveCustomProduct(product);
       setTemplates((current) => ({ ...current, [product.id]: loadTemplate(product) }));
       setForm(emptyProduct); setFormError(""); setSearchQuery(""); setAddOpen(false);
+      showSuccess(editingProduct ? "Product updated successfully." : "Product added successfully.");
       window.setTimeout(() => document.querySelector("#products")?.scrollIntoView({ behavior: "smooth" }), 0);
     } catch (error) { setFormError(error instanceof Error ? error.message : "The product could not be saved. Try again."); }
     finally { setSaving(false); }

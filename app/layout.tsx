@@ -1,3 +1,4 @@
+import { SuccessNotification } from "@/components/SuccessNotification";
 import type { Metadata } from "next";
 import "./globals.css";
 import "./refinements.css";
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" data-scroll-behavior="smooth">
-      <body>{children}</body>
+      <body>{children}<SuccessNotification /></body>
     </html>
   );
 }

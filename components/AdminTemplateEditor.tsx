@@ -1,5 +1,7 @@
 "use client";
 
+import { showSuccess } from "@/lib/notifications";
+
 import { maskPointerPosition } from "@/lib/maskEditing";
 import { previewBlendMode } from "@/lib/artworkBlend";
 import Link from "next/link";
@@ -177,7 +179,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
     setNotice("Last mask point removed");
   }
 
-  async function persist(publish: boolean) { if (saving || !ready) return; setSaving(true); try { const saved = await saveSharedTemplate(product, template, publish); setTemplate(saved); setNotice(publish ? `Published version ${saved.version}` : "Draft saved · customer version unchanged"); } catch (error) { setNotice(error instanceof Error ? error.message : "Template could not be saved. Try smaller mockup files."); } finally { setSaving(false); } }
+  async function persist(publish: boolean) { if (saving || !ready) return; setSaving(true); try { const saved = await saveSharedTemplate(product, template, publish); setTemplate(saved); showSuccess(publish ? "Template published successfully. The updated design is now available to customers." : "Template draft saved successfully."); setNotice(publish ? `Published version ${saved.version}` : "Draft saved · customer version unchanged"); } catch (error) { setNotice(error instanceof Error ? error.message : "Template could not be saved. Try smaller mockup files."); } finally { setSaving(false); } }
   function restore() { try { setTemplate(hasSupabaseConfiguration() ? createDefaultTemplate(product) : resetTemplate(product)); setNotice("Default draft restored · publish to update customers"); } catch { setNotice("Template could not be reset."); } }
 
   const areaStyle = { left: `${area.x}%`, top: `${area.y}%`, width: `${area.width}%`, height: `${area.height}%`, transform: `rotate(${area.rotation}deg)`, mixBlendMode: previewBlendMode(area.blendMode, area.overlayStrength) };

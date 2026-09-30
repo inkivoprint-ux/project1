@@ -1,5 +1,7 @@
 "use client";
 
+import { showSuccess } from "@/lib/notifications";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, ShoppingBag, Sparkles } from "lucide-react";
@@ -42,7 +44,7 @@ export function ProductDetail({ product }: { product: Product }) {
   const image = product.views?.find((item) => item.id === view)?.image ?? product.image;
   const customizerUrl = `/customize/${product.slug}?quantity=${selectedQuantity}&personalise=1&view=${view}${isTShirt ? `&sizes=${encodeURIComponent(serializeSizeQuantities(sizeQuantities))}` : ""}`;
   function addToCart() {
-    try { setCart(addCartEntries(createProductPurchaseEntries(product, quantity, sizeQuantities))); setCartOpen(true); setError(""); }
+    try { setCart(addCartEntries(createProductPurchaseEntries(product, quantity, sizeQuantities))); setCartOpen(true); setError(""); showSuccess("Added to cart successfully."); }
     catch (failure) { setError(failure instanceof Error ? failure.message : "Your cart could not be saved. Please allow browser storage and try again."); }
   }
 

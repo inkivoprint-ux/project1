@@ -1,5 +1,7 @@
 "use client";
 
+import { showSuccess } from "@/lib/notifications";
+
 import Link from "next/link";
 import localFont from "next/font/local";
 import { ArrowLeft, Check, Eye, EyeOff, ImagePlus, RotateCcw, ShoppingBag, Sparkles, Trash2, Type, Upload, ZoomIn } from "lucide-react";
@@ -291,6 +293,7 @@ export function Customizer({ product }: { product: Product }) {
       } else {
         addCartEntries(entries);
         setSavedDesignSignature(cartSignature);
+        showSuccess("Added to cart successfully. Your artwork files are saved with the item.");
         setMessage(designId ? "Your personalised item and generated files are saved in your cart." : "Product added to your cart without personalisation.");
       }
     } catch (failure) {

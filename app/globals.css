@@ -398,3 +398,9 @@ button { color: inherit; }
 .editable-print-area .mask-point:focus-visible { outline: 2px solid #f0ae51; outline-offset: 3px; }
 
 .checkout-saving-message { padding: 12px 14px; margin: 8px 0; background: #edf4ee; color: var(--green); font-size: 13px; line-height: 1.5; border-radius: 8px; }
+
+.success-popup-region { position: fixed; top: 22px; left: 50%; transform: translateX(-50%); width: min(440px, calc(100% - 28px)); z-index: 1000; pointer-events: none; }
+.success-popup { display: flex; align-items: center; gap: 12px; background: #f2f8f2; color: var(--green); border: 1px solid #bdd3c4; border-radius: 14px; box-shadow: 0 12px 38px rgba(0,0,0,.18); padding: 14px; pointer-events: auto; }
+.success-popup > svg { flex-shrink: 0; }
+.success-popup p { flex: 1; margin: 0; font-size: 14px; line-height: 1.5; }
+.success-popup button { flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px; border: 0; background: transparent; color: inherit; cursor: pointer; }
