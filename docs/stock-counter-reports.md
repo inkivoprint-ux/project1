@@ -47,6 +47,8 @@ For each side with text, an outlined .eps asset is saved with the originals and 
 
 ## Image uploads and larger personalised orders
 
+Sizes sharing the same product and design now store a single artwork set for new orders. The admin order groups those sizes with individual quantities, and the ZIP includes one folder per design. Online/counter totals and stock deductions still use the original size lines. Older duplicated storage objects are retained; their admin display and ZIP are consolidated by design and filename. Deleting an individual shared file removes matching copies for that design within the order.
+
 Every user-selected photo/logo, product photo and template test image accepts JPG/JPEG, PNG or WebP up to 5 MB per image. Generated print composites and EPS text have a separate 20 MB per-file ceiling. Original print inputs and EPS are preserved; only product previews are compressed. Product catalogue display photos are prepared at up to 1600 px for fast browsing.
 
 Orders above the combined 4.1 MB function-request budget upload files individually through short-lived signed URLs into private `order-assets` checkout staging. Final checkout verifies signed receipts, exact byte sizes and file content before copying files to the order and deducting stock. Staged files are removed after successful finalisation. Interrupted or abandoned staging uploads can remain in Storage and should be cleaned up periodically; receipt validity is 30 minutes. Total artwork is limited to 128 MB per order. No database migration is needed for this upload change.

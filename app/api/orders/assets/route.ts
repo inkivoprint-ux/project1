@@ -27,9 +27,14 @@ export async function DELETE(request: Request) {
     if (recordError) throw recordError;
     if (!fileRecord) return Response.json({ error: "The customer file no longer exists." }, { status: 404 });
 
-    const storageResult = await serviceClient.storage.from("order-assets").remove([storagePath]);
+    const related = await serviceClient.from("order_items").select("product_id, order_customizations(editable_state, generated_files(id, kind, original_filename, storage_path))").eq("order_id", orderId);
+    if (related.error) throw related.error;
+    const files = (related.data ?? []).flatMap(item => item.order_customizations.flatMap(customization => customization.generated_files.map(file => ({ ...file, productId: item.product_id, designId: customization.editable_state?.designId }))));
+    const selected = files.find(file => file.id === fileRecord.id);
+    const paths = selected?.designId ? files.filter(file => file.productId === selected.productId && file.designId === selected.designId && file.kind === selected.kind && file.original_filename === selected.original_filename).map(file => file.storage_path) : [storagePath];
+    const storageResult = await serviceClient.storage.from("order-assets").remove([...new Set(paths)]);
     if (storageResult.error) throw storageResult.error;
-    const databaseResult = await serviceClient.from("generated_files").delete().eq("id", fileRecord.id);
+    const databaseResult = await serviceClient.from("generated_files").delete().in("storage_path", paths);
     if (databaseResult.error) throw databaseResult.error;
     return Response.json({ deleted: true });
   } catch (error) {

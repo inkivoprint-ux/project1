@@ -31,7 +31,7 @@ describe("full order ZIP", () => {
   });
 
   it("keeps identical filenames from separate items and sanitizes archive paths", async () => {
-    const archive = await buildOrderZip({ ...order, orderNumber: "../../order", items: [order.items[0], { ...order.items[0], productName: "../../Bottle" }] }, async () => new Blob(["image"]));
+    const archive = await buildOrderZip({ ...order, orderNumber: "../../order", items: [order.items[0], { ...order.items[0], designId: "different-design", productName: "../../Bottle" }] }, async () => new Blob(["image"]));
     const files = unzipSync(new Uint8Array(await archive.blob.arrayBuffer()));
     expect(Object.keys(files)).toHaveLength(9);
     expect(Object.keys(files).every((path) => !path.includes(".."))).toBe(true);
@@ -40,6 +40,20 @@ describe("full order ZIP", () => {
 
   it("does not return an incomplete ZIP when a listed image is unavailable", async () => {
     await expect(buildOrderZip(order, async () => { throw new Error("Missing image"); })).rejects.toThrow("Missing image");
+  });
+
+  it("downloads a shared design once and retains every size and quantity in the details", async () => {
+    let reads = 0;
+    const archive = await buildOrderZip({ ...order, subtotal: 600, items: [
+      { ...order.items[0], size: "XS", quantity: 1 },
+      { ...order.items[0], size: "S", quantity: 2, assets: order.items[0].assets.map(asset => ({ ...asset, storagePath: `legacy-size-copy/${asset.fileName}` })) },
+      { ...order.items[0], size: "XXL", quantity: 3 },
+    ] }, async () => { reads++; return new Blob(["image"]); });
+    const files = unzipSync(new Uint8Array(await archive.blob.arrayBuffer()));
+    expect(reads).toBe(4); expect(Object.keys(files)).toHaveLength(5);
+    const details = strFromU8(files["customer-and-order-details.txt"]);
+    expect(details).toContain("XS × 1, S × 2, XXL × 3");
+    expect(details).toContain("ORDER TOTAL: INR 600.00");
   });
 
   it("still exports customer details for an order with no artwork", async () => {

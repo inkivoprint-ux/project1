@@ -62,7 +62,14 @@ export function parseOrderPayload(value: unknown): OrderPayload {
   const calculatedSubtotal = parsed.data.items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
   if (Math.abs(calculatedSubtotal - parsed.data.subtotal) > 0.01) throw new Error("The order subtotal does not match its items.");
 
+  const designs = new Map<string, string>();
   for (const item of parsed.data.items) {
+    if (item.designId) {
+      const key = JSON.stringify([item.productId, item.designId]);
+      const definition = JSON.stringify([item.configuration, item.assets.map(asset => [asset.kind, asset.slot ?? 0, asset.fileName, asset.mimeType]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))]);
+      if (designs.has(key) && designs.get(key) !== definition) throw new Error("Sizes sharing a design must use the same artwork and settings.");
+      designs.set(key, definition);
+    }
     for (const asset of item.assets) {
       if (asset.mimeType === "application/postscript" && (asset.kind !== "original" || ![4,5].includes(asset.slot ?? 0) || !asset.fileName.endsWith(".eps"))) throw new Error("Text EPS must use its dedicated text slot.");
       if (asset.kind === "original" && asset.mimeType !== "application/postscript" && (asset.slot ?? 0) > 3) throw new Error("Invalid photo slot.");

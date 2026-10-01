@@ -5,6 +5,7 @@ import { hasSupabaseConfiguration } from "./supabase/config";
 import { z } from "zod";
 import { assertOrderCanBePurged, transitionOrder, type OrderManagementAction } from "./orderManagement";
 import { assertProductSize, T_SHIRT_SIZES, type TShirtSize } from "./productSizes";
+import { orderDesignKey } from "./orderArtwork";
 
 export type AssetKind = "original" | "edited" | "preview";
 export type ImageMimeType = "image/jpeg" | "image/png" | "image/webp" | "application/postscript";
@@ -257,9 +258,10 @@ export function buildWhatsAppOrderMessage(order: OrderRecord) {
 }
 
 export function removeAssetFromOrderRecord(order: OrderRecord, itemIndex: number, kind: AssetKind, fileName: string): OrderRecord {
+  const designKey = order.items[itemIndex] ? orderDesignKey(order.items[itemIndex]) : undefined;
   return {
     ...order,
-    items: order.items.map((item, index) => index === itemIndex ? {
+    items: order.items.map((item, index) => index === itemIndex || (designKey && orderDesignKey(item) === designKey) ? {
       ...item,
       assets: item.assets.filter((asset) => !(asset.kind === kind && asset.fileName === fileName)),
     } : item),

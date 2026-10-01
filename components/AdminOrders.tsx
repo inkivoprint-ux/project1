@@ -8,6 +8,7 @@ import { deleteOrderAsset, loadAdminOrders, loadDesignDraft, loadOrders, manageO
 import { buildOrderZip } from "@/lib/orderZip";
 import type { OrderManagementAction } from "@/lib/orderManagement";
 import { useDialog } from "@/lib/useDialog";
+import { groupOrderArtwork } from "@/lib/orderArtwork";
 
 export function AdminOrders({ onCount, channel = "online" }: { onCount?: (count: number) => void; channel?: "online" | "offline" }) {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
@@ -37,10 +38,10 @@ export function AdminOrders({ onCount, channel = "online" }: { onCount?: (count:
       <div className="admin-order-head"><div><span>{order.orderNumber} · {order.salesChannel === "offline" ? "Offline counter" : "Online"}</span><strong>{order.customerName}</strong><small>{order.phone} · {order.address}</small></div><div><span className={`order-storage ${order.storageMode}`}><PackageCheck /> {order.storageMode === "supabase" ? "Saved to Supabase" : "Local workspace"}</span><small>{new Date(order.createdAt).toLocaleString("en-IN")}</small></div></div>
       <OrderZipDownload order={order} />
       <OrderManagementControls order={order} onChanged={refresh} />
-      {order.items.map((item, index) => <div className="admin-order-item" key={`${item.productId}-${index}`}>
-        <div className="admin-order-product"><strong>{item.quantity} × {item.productName}{item.size ? ` · Size ${item.size}` : ""}</strong><span>{formatPrice(item.unitPrice * item.quantity)}</span></div>
+      {groupOrderArtwork(order).map((group, index) => <div className="admin-order-item" key={`${group.item.productId}-${index}`}>
+        <div className="admin-order-product"><strong>{group.quantity} × {group.item.productName}{group.sizes ? ` · Sizes: ${group.sizes}` : ""}</strong><span>{formatPrice(group.total)}</span></div>
         <div className="order-assets">
-          {item.assets.length ? item.assets.map((asset) => <OrderAssetTile key={`${asset.kind}-${asset.fileName}`} order={order} itemIndex={index} asset={asset} onDeleted={refresh} />) : <div className="order-no-assets"><FileImage /><span>{item.designId ? "No files available for this item" : "Without personalisation · No artwork required"}</span></div>}
+          {group.assets.length ? group.assets.map(({ asset, itemIndex }) => <OrderAssetTile key={`${asset.kind}-${asset.fileName}`} order={order} itemIndex={itemIndex} asset={asset} onDeleted={refresh} />) : <div className="order-no-assets"><FileImage /><span>{group.item.designId ? "No files available for this item" : "Without personalisation · No artwork required"}</span></div>}
         </div>
       </div>)}
       <footer><span>Order total</span><strong>{formatPrice(order.subtotal)}</strong></footer>

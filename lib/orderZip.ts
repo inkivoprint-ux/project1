@@ -1,8 +1,10 @@
 import type { OrderAsset, OrderRecord } from "./orders";
+import { groupOrderArtwork } from "./orderArtwork";
 
 const safeName = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.{2,}/g, "_").slice(0, 120) || "file";
 
 export function orderDetailsText(order: OrderRecord) {
+  const groups = groupOrderArtwork(order);
   return [
     "INKIVO ORDER DETAILS", `Sales channel: ${order.salesChannel === "offline" ? "Offline counter" : "Online"}`, `Order number: ${order.orderNumber}`,
     `Order date: ${new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} (India time)`,
@@ -13,28 +15,30 @@ export function orderDetailsText(order: OrderRecord) {
       `${index + 1}. ${item.productName}${item.size ? ` | Size: ${item.size}` : ""}`,
       `Quantity: ${item.quantity} | Unit price: INR ${item.unitPrice.toFixed(2)} | Item total: INR ${(item.quantity * item.unitPrice).toFixed(2)}`,
       `Print side: ${item.configuration?.sides ? Object.keys(item.configuration.sides as Record<string, unknown>).join(" + ") : item.configuration?.view === "back" ? "Back" : "Front"}`,
-      `Artwork files: ${item.assets.length}`,
-      ...item.assets.map((asset, fileIndex) => `  ${fileIndex + 1}. ${asset.mimeType === "application/postscript" ? "Outlined text EPS" : asset.kind === "edited" ? "Composite artwork reference" : asset.kind === "preview" ? "Product preview" : "Original upload"}: ${asset.fileName}`),
+      `Artwork folder: item-${groups.findIndex(group => group.lines.some(line => line.index === index)) + 1}-${safeName(item.productName)}`,
       "",
     ]),
     `ORDER TOTAL: INR ${order.subtotal.toFixed(2)}`,
-    "", "Each item's available files are in its numbered folder. Removed files are not included.",
+    "", "SHARED ARTWORK FILES",
+    ...groups.flatMap((group, index) => [`item-${index + 1}-${safeName(group.item.productName)}${group.sizes ? ` | Sizes: ${group.sizes}` : ""}`, ...group.assets.map(({ asset }, fileIndex) => `  ${fileIndex + 1}. ${asset.mimeType === "application/postscript" ? "Outlined text EPS" : asset.kind === "edited" ? "Composite artwork reference" : asset.kind === "preview" ? "Product preview" : "Original upload"}: ${asset.fileName}`)]),
+    "", "One artwork folder per product/design. Sizes sharing a design use the same files. Removed files are not included.",
   ].join("\r\n");
 }
 
 export async function buildOrderZip(order: OrderRecord, readAsset: (asset: OrderAsset) => Promise<Blob>, onProgress?: (done: number, total: number) => void) {
   const { zip } = await import("fflate");
   const entries: Record<string, Uint8Array> = { "customer-and-order-details.txt": new TextEncoder().encode(orderDetailsText(order)) };
-  const total = order.items.reduce((count, item) => count + item.assets.length, 0);
+  const groups = groupOrderArtwork(order);
+  const total = groups.reduce((count, group) => count + group.assets.length, 0);
   let done = 0;
   let bytes = 0;
-  for (const [itemIndex, item] of order.items.entries()) {
-    for (const [fileIndex, asset] of item.assets.entries()) {
+  for (const [itemIndex, group] of groups.entries()) {
+    for (const [fileIndex, { asset }] of group.assets.entries()) {
       const blob = await readAsset(asset);
       if (!blob.size) throw new Error(`The file ${asset.fileName} is empty. Refresh the order and try again.`);
       bytes += blob.size;
       if (bytes > 128 * 1024 * 1024) throw new Error("This order is too large for one ZIP on this device. Download its files individually.");
-      entries[`item-${itemIndex + 1}-${safeName(item.productName)}/${fileIndex + 1}-${safeName(asset.fileName)}`] = new Uint8Array(await blob.arrayBuffer());
+      entries[`item-${itemIndex + 1}-${safeName(group.item.productName)}/${fileIndex + 1}-${safeName(asset.fileName)}`] = new Uint8Array(await blob.arrayBuffer());
       onProgress?.(++done, total);
     }
   }

@@ -12,6 +12,7 @@ import { assertSameOrigin, readLimitedBody } from "@/lib/httpSafety";
 import { assertSafeTextEps } from "@/lib/textEps";
 import { z } from "zod";
 import { stagedUploadSchema, verifyStagedUpload } from "@/lib/stagedOrderUploads";
+import { orderDesignKey } from "@/lib/orderArtwork";
 
 const orderSelect = "id, order_number, customer_name, phone, shipping_address, subtotal, created_at, state, updated_at, completed_at, deleted_at, request_hash, order_items(product_id, product_name_snapshot, variant_snapshot, quantity, unit_price, order_customizations(editable_state, generated_files(kind, original_filename, mime_type, storage_path)))";
 
@@ -131,6 +132,7 @@ export async function POST(request: Request) {
     const orderNumber = orderRow.order_number;
 
     const completedItems: OrderItemRecord[] = [];
+    const sharedArtwork = new Map<string, { assets: OrderAsset[]; templateId: string; areaId: string }>();
     const uploadedPaths: string[] = [];
     try {
       for (const [index, item] of payload.items.entries()) {
@@ -149,6 +151,14 @@ export async function POST(request: Request) {
         if (itemError || !orderItem) throw itemError ?? new Error("Order item could not be saved.");
 
         if (!item.assets.length) { completedItems.push(item); continue; }
+        const designKey = orderDesignKey(item)!;
+        const shared = sharedArtwork.get(designKey);
+        if (shared) {
+          const customization = await supabase.from("order_customizations").insert({ order_item_id: orderItem.id, template_id: shared.templateId, area_id: shared.areaId, editable_state: { ...item.configuration, designId: item.designId, productId: item.productId } });
+          if (customization.error) throw customization.error;
+          completedItems.push({ ...item, assets: shared.assets });
+          continue;
+        }
         const snapshot = (item.configuration?.templateSnapshot ?? (knownProduct ? createDefaultTemplate(knownProduct) : null)) as TemplateConfig | null;
         if (!snapshot) throw new Error("The print template snapshot is missing. Personalise this product again.");
         validateTemplate(snapshot);
@@ -177,6 +187,7 @@ export async function POST(request: Request) {
           assets.push({ kind: declaredAsset.kind, slot: declaredAsset.slot, fileName: file.name, mimeType: file.type, storagePath, designId: item.designId });
         }
         completedItems.push({ ...item, assets });
+        sharedArtwork.set(designKey, { assets, templateId: templateRow.id, areaId: areaRow.id });
       }
       const update = await supabase.from("orders").update({ state: "submitted", updated_at: new Date().toISOString() }).eq("id", orderRow.id);
       if (update.error) throw update.error;

@@ -1,5 +1,6 @@
 import type { OrderRecord } from "./orders";
 import { isTShirtSize } from "./productSizes";
+import { orderDesignKey } from "./orderArtwork";
 
 export type CloudOrderRow = {
   id: string; order_number: string; customer_name: string; phone: string; shipping_address: { address?: string; salesChannel?: string }; subtotal: number | string; created_at: string;
@@ -8,10 +9,15 @@ export type CloudOrderRow = {
 };
 
 export function cloudOrderRecord(row: CloudOrderRow): OrderRecord {
-  return { salesChannel: row.shipping_address?.salesChannel === "offline" ? "offline" : "online", id: row.id, orderNumber: row.order_number, customerName: row.customer_name, phone: row.phone, address: row.shipping_address?.address ?? "", subtotal: Number(row.subtotal), createdAt: row.created_at, completedAt: row.completed_at ?? (row.state === "completed" ? row.updated_at ?? row.created_at : undefined), deletedAt: row.deleted_at ?? undefined, purgeStarted: Boolean(row.deleted_at && row.state === "processing"), status: "submitted", storageMode: "supabase", items: row.order_items.map((item) => {
+  const order: OrderRecord = { salesChannel: row.shipping_address?.salesChannel === "offline" ? "offline" : "online", id: row.id, orderNumber: row.order_number, customerName: row.customer_name, phone: row.phone, address: row.shipping_address?.address ?? "", subtotal: Number(row.subtotal), createdAt: row.created_at, completedAt: row.completed_at ?? (row.state === "completed" ? row.updated_at ?? row.created_at : undefined), deletedAt: row.deleted_at ?? undefined, purgeStarted: Boolean(row.deleted_at && row.state === "processing"), status: "submitted", storageMode: "supabase", items: row.order_items.map((item) => {
     const customization = item.order_customizations[0];
     const state = customization?.editable_state;
     const designId = typeof state?.designId === "string" ? state.designId : undefined;
     return { productId: typeof state?.productId === "string" ? state.productId : typeof item.variant_snapshot?.productId === "string" ? item.variant_snapshot.productId : item.product_id, productName: item.product_name_snapshot, quantity: item.quantity, unitPrice: Number(item.unit_price), ...(isTShirtSize(item.variant_snapshot?.size) ? { size: item.variant_snapshot.size } : {}), designId, configuration: state, assets: (customization?.generated_files ?? []).flatMap((file) => file.kind === "original" || file.kind === "edited" || file.kind === "preview" ? [{ kind: file.kind, fileName: file.original_filename ?? file.storage_path.split("/").pop() ?? "order-file", mimeType: file.mime_type, storagePath: file.storage_path, designId }] : []) };
   }) };
+  const shared = new Map<string, OrderRecord["items"][number]["assets"]>();
+  for (const item of order.items) { const key = orderDesignKey(item); if (key && item.assets.length && !shared.has(key)) shared.set(key, item.assets); }
+  for (const item of order.items) { const key = orderDesignKey(item); if (key && !item.assets.length) item.assets = shared.get(key) ?? []; }
+  return order;
 }
+
