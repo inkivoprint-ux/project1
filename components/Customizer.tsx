@@ -1,6 +1,7 @@
 "use client";
 
 import { showSuccess } from "@/lib/notifications";
+import { validateImageUpload, IMAGE_UPLOAD_HINT } from "@/lib/imageUpload";
 
 import Link from "next/link";
 import localFont from "next/font/local";
@@ -218,8 +219,7 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 15 * 1024 * 1024) { setMessage("Please choose an image smaller than 15 MB."); return; }
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { setMessage("Please upload a JPG, PNG, or WEBP image."); return; }
+    try { validateImageUpload(file); } catch (error) { setMessage((error as Error).message); event.target.value = ""; return; }
     if (imageUrl) URL.revokeObjectURL(imageUrl);
     const nextUrl = URL.createObjectURL(file);
     const index = activePhotoIndex;
@@ -439,7 +439,7 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
               <h2>{imageUrl ? "Position your image" : "Add your image"}</h2>
               <p>{imageUrl ? "Drag directly on the product, or use the precise controls below. Every change updates the preview immediately. The second image / logo stays above the main photo." : "Upload a clear JPG, PNG, or WEBP. Use a transparent PNG for a logo and place each image with the controls."}</p>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} hidden />
-              <button className={`upload-zone ${imageUrl ? "compact" : ""}`} onClick={() => fileRef.current?.click()}><span><Upload /></span><strong>{activePhotoIndex === 1 ? imageUrl ? "Replace logo / second photo" : "Upload logo / second photo" : imageUrl ? "Replace photo" : "Upload a photo"}</strong><small>JPG, PNG or WEBP · up to 15 MB</small></button>
+              <button className={`upload-zone ${imageUrl ? "compact" : ""}`} onClick={() => fileRef.current?.click()}><span><Upload /></span><strong>{activePhotoIndex === 1 ? imageUrl ? "Replace logo / second photo" : "Upload logo / second photo" : imageUrl ? "Replace photo" : "Upload a photo"}</strong><small>{IMAGE_UPLOAD_HINT}</small></button>
               {imageUrl && <>
                 {imageMeta && <div className={`upload-quality ${imagePrintDpi !== null && imagePrintDpi < 150 ? "warning" : ""}`}><Check size={14} /><div><strong>Original image preserved</strong><small>{imageMeta.width} × {imageMeta.height} px · approximately {imagePrintDpi} DPI at this print size</small></div></div>}
                 {imageSizingEnabled && <label className="control-row"><span><ZoomIn size={16} /> Size / crop <output>{Math.round(imageScale * 100)}%</output></span><input type="range" min="0.35" max="3" step="0.02" value={imageScale} onChange={(event) => setImageScale(Number(event.target.value))} /></label>}

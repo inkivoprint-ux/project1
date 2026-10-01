@@ -1,6 +1,7 @@
 "use client";
 
 import { showSuccess } from "@/lib/notifications";
+import { validateImageUpload, IMAGE_UPLOAD_HINT } from "@/lib/imageUpload";
 
 import { maskPointerPosition } from "@/lib/maskEditing";
 import { previewBlendMode } from "@/lib/artworkBlend";
@@ -78,7 +79,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
   function handleArtwork(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 15 * 1024 * 1024) { setNotice("Choose a JPG, PNG, or WebP image smaller than 15 MB"); return; }
+    try { validateImageUpload(file); } catch (error) { setNotice((error as Error).message); event.target.value = ""; return; }
     if (artwork.startsWith("blob:")) URL.revokeObjectURL(artwork);
     setArtwork(URL.createObjectURL(file));
     setNotice("Replacement artwork loaded · use Artwork fit to position it");
@@ -89,8 +90,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
   async function handleMockup(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { setNotice("Use a JPG, PNG, or WEBP mockup image"); return; }
-    if (file.size > 15 * 1024 * 1024) { setNotice("Mockup images must be smaller than 15 MB"); return; }
+    try { validateImageUpload(file); } catch (error) { setNotice((error as Error).message); event.target.value = ""; return; }
     try {
       setNotice("Loading mockup…");
       const prepared = await prepareMockup(file);
@@ -224,7 +224,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
                     <RangeField label="Size / crop" value={Math.round((area.defaultArtworkScale ?? 1) * 100)} min={35} max={300} onChange={(v) => updateArea("defaultArtworkScale", v / 100)} suffix="%" />
                     <div className="number-grid"><NumberField label="Horizontal" value={area.defaultArtworkOffsetX ?? 0} onChange={(v) => updateArea("defaultArtworkOffsetX", clamp(v, -120, 120))} /><NumberField label="Vertical" value={area.defaultArtworkOffsetY ?? 0} onChange={(v) => updateArea("defaultArtworkOffsetY", clamp(v, -120, 120))} /></div>
                     <RangeField label="Artwork rotation" value={area.defaultArtworkRotation ?? 0} min={-180} max={180} onChange={(v) => updateArea("defaultArtworkRotation", v)} suffix="°" />
-                    <button className="secondary-upload" onClick={() => uploadRef.current?.click()}><Upload size={15} /> Replace test photo</button>
+                    <button className="secondary-upload" onClick={() => uploadRef.current?.click()}><Upload size={15} /> Replace test photo · max 5 MB</button>
                   </ControlSection>
                 </> : editTarget === "area" ? <>
                   <ControlSection title="Print area placement" description="Drag the complete box on the preview or enter exact values.">
@@ -274,7 +274,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
                 {area.surface === "fabric" && <div className="fabric-render-status"><Sparkles size={15} /><div><strong>Photoshop-style fabric composite</strong><small>High-resolution displacement + clipped shirt shadows + controlled highlights + textile detail.</small></div></div>}
                 <RangeField label="Opacity" value={Math.round(area.opacity * 100)} min={10} max={100} onChange={(v) => updateArea("opacity", v / 100)} suffix="%" />
                 {(area.maskShape ?? "rectangle") === "rectangle" && <RangeField label="Mask corner radius" value={area.maskRadius} min={0} max={50} onChange={(v) => updateArea("maskRadius", v)} suffix="%" />}
-                <button className="secondary-upload" onClick={() => uploadRef.current?.click()}><Upload size={15} /> Test replacement artwork</button>
+                <button className="secondary-upload" onClick={() => uploadRef.current?.click()}><Upload size={15} /> Test replacement artwork · max 5 MB</button>
               </ControlSection>}
               {tab === "tools" && <ControlSection title="Customer tools" description="Control what shoppers can change for this product.">
                 <Toggle label="Allow image upload" checked={template.tools.images} onChange={(v) => updateTool("images", v)} />
@@ -301,7 +301,8 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
                 </div>
               </MockupStage>
             </div>
-            <div className="template-preview-foot"><div><strong>{product.name} · {productView.label}</strong><small>{area.surface.replace("-", " ")} · {area.widthMm} × {area.heightMm} mm · {area.targetDpi} DPI</small></div><button onClick={() => mockupRef.current?.click()}><Upload size={15} /> Replace product photo</button><button onClick={() => uploadRef.current?.click()}><ImagePlus size={15} /> Replace test image</button></div>
+            <div className="template-preview-foot"><div><strong>{product.name} · {productView.label}</strong><small>{area.surface.replace("-", " ")} · {area.widthMm} × {area.heightMm} mm · {area.targetDpi} DPI</small></div><button onClick={() => mockupRef.current?.click()}><Upload size={15} /> Replace product photo · max 5 MB</button><button onClick={() => uploadRef.current?.click()}><ImagePlus size={15} /> Replace test image · max 5 MB</button></div>
+            <p className="template-upload-hint">{IMAGE_UPLOAD_HINT}</p>
             <input ref={uploadRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleArtwork} />
             <input ref={mockupRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleMockup} />
           </section>
@@ -336,3 +337,4 @@ function prepareMockup(file: File) {
     image.src = objectUrl;
   });
 }
+

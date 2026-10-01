@@ -10,6 +10,8 @@ import { assertProductSize } from "@/lib/productSizes";
 import { hasSupabaseConfiguration, serverSupabaseKey } from "@/lib/supabase/config";
 import { assertSameOrigin, readLimitedBody } from "@/lib/httpSafety";
 import { assertSafeTextEps } from "@/lib/textEps";
+import { z } from "zod";
+import { stagedUploadSchema, verifyStagedUpload } from "@/lib/stagedOrderUploads";
 
 const orderSelect = "id, order_number, customer_name, phone, shipping_address, subtotal, created_at, state, updated_at, completed_at, deleted_at, request_hash, order_items(product_id, product_name_snapshot, variant_snapshot, quantity, unit_price, order_customizations(editable_state, generated_files(kind, original_filename, mime_type, storage_path)))";
 
@@ -23,6 +25,7 @@ export async function POST(request: Request) {
   let formData: FormData;
   let payload: ReturnType<typeof parseOrderPayload>;
   let orderFiles: ReturnType<typeof collectOrderFiles>;
+  let stagedPaths: string[] = [];
   try {
     assertSameOrigin(request);
     const bytes = await readLimitedBody(request, MAX_ORDER_REQUEST_BYTES);
@@ -32,8 +35,35 @@ export async function POST(request: Request) {
       const session = await getAdminSession();
       if (session.error) return Response.json({ error: session.error }, { status: session.status });
     }
-    orderFiles = collectOrderFiles(payload, formData);
     if (!payload.idempotencyKey) throw new Error("Refresh this checkout before submitting.");
+    if (formData.has("stagedAssets")) {
+      // Check retries before reading temporary files, which may already be removed.
+      const stagingClient = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { idempotencyKey: checkoutKey, ...checkoutContent } = payload;
+      const prior = await stagingClient.from("orders").select(orderSelect).eq("idempotency_key", createHash("sha256").update(checkoutKey!).digest("hex")).maybeSingle();
+      if (prior.error) throw prior.error;
+      if (prior.data) {
+        if (prior.data.request_hash !== createHash("sha256").update(JSON.stringify(checkoutContent)).digest("hex")) return Response.json({ error: "This checkout changed. Reopen it before submitting." }, { status: 409 });
+        if (["submitted", "confirmed", "design_review", "printing", "ready", "completed"].includes(prior.data.state) && !prior.data.deleted_at) return Response.json({ order: cloudOrderRecord(prior.data as unknown as CloudOrderRow) }, { headers: { "Cache-Control": "private, no-store" } });
+        return Response.json({ error: "This order is already processing or needs recovery. Contact Inkivo before submitting another order." }, { status: 409 });
+      }
+      const receipts = z.array(stagedUploadSchema).min(1).max(990).parse(JSON.parse(String(formData.get("stagedAssets"))));
+      if (new Set(receipts.map(file => file.key)).size !== receipts.length || receipts.reduce((sum, file) => sum + file.size, 0) > 128 * 1024 * 1024) throw new Error("Invalid artwork upload list.");
+      const declarations = new Map(payload.items.flatMap((item, index) => item.assets.map(asset => [orderAssetKey(asset.uploadItemIndex ?? index, asset), asset] as const)));
+      if (declarations.size !== receipts.length) throw new Error("Some artwork files are missing.");
+      const storage = stagingClient.storage.from("order-assets");
+      for (const receipt of receipts) {
+        verifyStagedUpload(receipt, payload.idempotencyKey, serviceKey);
+        const asset = declarations.get(receipt.key);
+        if (!asset || asset.fileName !== receipt.fileName || asset.mimeType !== receipt.mimeType || formData.has(receipt.key)) throw new Error("The uploaded artwork does not match this order.");
+        const downloaded = await storage.download(receipt.path);
+        if (downloaded.error || !downloaded.data || downloaded.data.size !== receipt.size) throw new Error("Artwork upload is incomplete. Retry this checkout.");
+        formData.append(receipt.key, new File([downloaded.data], receipt.fileName, { type: receipt.mimeType }));
+      }
+      stagedPaths = receipts.map(file => file.path);
+      formData.delete("stagedAssets");
+    }
+    orderFiles = collectOrderFiles(payload, formData);
     for (const file of orderFiles.values()) {
       if (file.type === "application/postscript") assertSafeTextEps(await file.text());
       const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
@@ -60,7 +90,7 @@ export async function POST(request: Request) {
     // Vercel overwrites X-Forwarded-For. Do not trust arbitrary forwarded headers elsewhere.
     const address = process.env.VERCEL ? request.headers.get("x-forwarded-for")?.split(",")[0].trim() : "local-server";
     const identifier = createHmac("sha256", serviceKey).update(address || "unknown-client").digest("hex");
-    if (payload.salesChannel !== "offline") {
+    if (payload.salesChannel !== "offline" && !stagedPaths.length) {
       const limit = await supabase.rpc("consume_order_attempt", { identifier_hash: identifier });
       if (limit.error) throw limit.error;
       if (limit.data !== true) return Response.json({ error: "Too many order attempts. Please wait ten minutes or contact Inkivo." }, { status: 429, headers: { "Retry-After": "600" } });
@@ -160,6 +190,7 @@ export async function POST(request: Request) {
     }
 
     const order: OrderRecord = { salesChannel: payload.salesChannel ?? "online", id: orderRow.id, orderNumber, customerName: payload.customerName.trim(), phone: payload.phone.trim(), address: payload.address.trim(), subtotal: payload.subtotal, status: "submitted", storageMode: "supabase", createdAt: orderRow.created_at, items: completedItems };
+    if (stagedPaths.length) await supabase.storage.from("order-assets").remove(stagedPaths);
     return Response.json({ order }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (failure) {
     if (failure && typeof failure === "object" && "message" in failure && String(failure.message).includes("Insufficient stock")) return Response.json({ error: "Insufficient stock. Refresh products and reduce the quantity before ordering." }, { status: 409 });

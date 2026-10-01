@@ -203,7 +203,25 @@ export async function submitCartOrder(args: { cart: CartEntry[]; products: Produ
   window.sessionStorage.setItem(pendingKey, idempotencyKey);
   const payload = { ...basePayload, idempotencyKey };
   parseOrderPayload(payload);
-  assertOrderUploadBudget(payload, [...formData.values()].filter((value): value is File => value instanceof File));
+  const checkoutFiles = [...formData.entries()].filter((entry): entry is [string, File] => entry[1] instanceof File);
+  const largeUpload = checkoutFiles.reduce((sum, [, file]) => sum + file.size + 1024, 64_000 + new TextEncoder().encode(JSON.stringify(payload)).length) > 4_100_000;
+  if (largeUpload) {
+    const prepared = await fetch("/api/orders/uploads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payload, files: checkoutFiles.map(([key, file]) => ({ key, size: file.size })) }) });
+    const uploadResult = await prepared.json();
+    if (!prepared.ok) throw new Error(uploadResult.error || "Artwork uploads could not be prepared.");
+    const { createClient } = await import("./supabase/client");
+    const storage = createClient().storage.from("order-assets");
+    const receipts: import("./stagedOrderUploads").StagedUpload[] = [];
+    for (const upload of uploadResult.uploads as Array<{ receipt: import("./stagedOrderUploads").StagedUpload; token: string }>) {
+      const file = formData.get(upload.receipt.key);
+      if (!(file instanceof File)) throw new Error("A prepared artwork file is missing.");
+      const result = await storage.uploadToSignedUrl(upload.receipt.path, upload.token, file, { contentType: file.type });
+      if (result.error) throw new Error("Artwork upload failed. Check your connection and retry this checkout.");
+      receipts.push(upload.receipt);
+      formData.delete(upload.receipt.key);
+    }
+    formData.set("stagedAssets", JSON.stringify(receipts));
+  } else assertOrderUploadBudget(payload, checkoutFiles.map(([, file]) => file));
   formData.set("payload", JSON.stringify(payload));
 
   let response: Response;
@@ -287,9 +305,9 @@ export async function deleteOrderAsset(args: { orderId: string; itemIndex: numbe
 }
 
 async function prepareCheckoutAsset(asset: DraftAsset): Promise<DraftAsset> {
-  // Keep the print-ready transparent PNG untouched. Optimise only the photo
-  // reference and product preview; the browser draft retains every original.
-  if (asset.mimeType === "application/postscript" || asset.kind === "edited" || asset.blob.size < 250_000) return asset;
+  // Original images, print-ready PNGs and EPS vectors remain untouched.
+  // Only the product preview is optimised for checkout.
+  if (asset.kind !== "preview" || asset.blob.size < 250_000) return asset;
   const url = URL.createObjectURL(asset.blob);
   try {
     const image = new Image();

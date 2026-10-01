@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { OrderItemRecord } from "./orders";
 import { T_SHIRT_SIZES } from "./productSizes";
+import { MAX_IMAGE_UPLOAD_BYTES } from "./imageUpload";
 
 const supportedMimeTypes = ["image/jpeg", "image/png", "image/webp", "application/postscript"] as const;
 const assetKinds = ["original", "edited", "preview"] as const;
@@ -106,6 +107,7 @@ export function collectOrderFiles(payload: OrderPayload, formData: FormData) {
         throw new Error(`${asset.fileName} must be a JPG, PNG, or WebP image.`);
       }
       if (value.size > 20 * 1024 * 1024) throw new Error(`${asset.fileName} exceeds 20 MB.`);
+      if (asset.kind === "original" && asset.mimeType !== "application/postscript" && value.size > MAX_IMAGE_UPLOAD_BYTES) throw new Error(`${asset.fileName}: each uploaded image must be 5 MB or smaller.`);
       files.set(orderAssetKey(itemIndex, asset), value);
     });
   });

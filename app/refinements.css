@@ -438,6 +438,7 @@ section[id] { scroll-margin-top: 100px; }
 }
 
 /* Consistent upright sans-serif typography throughout the website interface. */
+.template-upload-hint { flex: none; margin: 0; padding: 4px 8px; font-size: 10px; text-align: center; color: var(--muted); background: white; }
 /* Admin editing keeps the same live-preview arrangement as customer editing. */
 @media (max-width: 760px) {
   .template-workspace { align-items: stretch; }

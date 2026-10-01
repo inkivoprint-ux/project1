@@ -1,6 +1,7 @@
 "use client";
 
 import { showSuccess } from "@/lib/notifications";
+import { prepareProductPhoto, validateImageUpload, IMAGE_UPLOAD_HINT } from "@/lib/imageUpload";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -71,15 +72,11 @@ export function AdminDashboard() {
   const visibleProducts = useMemo(() => filterProducts(catalogue, searchQuery), [catalogue, searchQuery]);
   const setField = <K extends keyof ProductForm>(key: K, value: ProductForm[K]) => setForm((current) => ({ ...current, [key]: value }));
 
-  const readProductImage = (event: ChangeEvent<HTMLInputElement>) => {
+  const readProductImage = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return setFormError("Choose a PNG, JPG, or WebP product image.");
-    if (file.size > 2_500_000) return setFormError("Use a product image smaller than 2.5 MB.");
-    const reader = new FileReader();
-    reader.onload = () => { setField("image", String(reader.result)); setFormError(""); };
-    reader.onerror = () => setFormError("The product image could not be read. Please try another file.");
-    reader.readAsDataURL(file);
+    try { validateImageUpload(file); setField("image", await prepareProductPhoto(file)); setFormError(""); }
+    catch (error) { setFormError((error as Error).message); event.target.value = ""; }
   };
 
   const addProduct = async (event: FormEvent<HTMLFormElement>) => {
@@ -170,7 +167,7 @@ export function AdminDashboard() {
           <header><div><span className="admin-kicker">CATALOGUE DETAILS</span><h2 id="add-product-title">{editingProduct ? "Edit product" : "Add a product"}</h2><p>{cloud ? "Changes are saved to the shared catalogue." : "Changes are saved on this development device."}</p></div><button data-dialog-focus type="button" className="icon-button" disabled={saving} onClick={() => setAddOpen(false)} aria-label="Close"><X /></button></header>
           <div className="product-form-scroll">
             <section className="product-image-field">
-              <label htmlFor="new-product-image">{form.image ? <Image src={form.image} alt="Product preview" width={220} height={260} unoptimized /> : <span><ImagePlus size={28} /><strong>Upload product image</strong><small>PNG with transparent background works best · maximum 2.5 MB</small></span>}</label>
+              <label htmlFor="new-product-image">{form.image ? <Image src={form.image} alt="Product preview" width={220} height={260} unoptimized /> : <span><ImagePlus size={28} /><strong>Upload product image</strong></span>}<small>{IMAGE_UPLOAD_HINT}</small></label>
               <input id="new-product-image" type="file" accept="image/png,image/jpeg,image/webp" onChange={readProductImage} />
               <label className="product-upload-button" htmlFor="new-product-image"><Upload size={15} /> {form.image ? "Replace image" : "Choose image"}</label>
             </section>
