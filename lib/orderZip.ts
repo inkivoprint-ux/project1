@@ -6,8 +6,7 @@ export function orderDetailsText(order: OrderRecord) {
   return [
     "INKIVO ORDER DETAILS", `Sales channel: ${order.salesChannel === "offline" ? "Offline counter" : "Online"}`, `Order number: ${order.orderNumber}`,
     `Order date: ${new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} (India time)`,
-    `Customer: ${order.customerName}`, `Phone: ${order.phone}`,
-    `Shipping address:\n${order.address}`,
+    "", "Customer details", order.customerName, order.phone, order.address, "",
     `Status: ${order.deletedAt ? "In Trash" : order.completedAt ? "Completed" : "In progress"}`,
     "", "ORDER ITEMS",
     ...order.items.flatMap((item, index) => [
