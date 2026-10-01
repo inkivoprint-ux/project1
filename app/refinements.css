@@ -427,3 +427,17 @@ section[id] { scroll-margin-top: 100px; }
   .customizer-panel input, .customizer-panel textarea { scroll-margin-top: clamp(180px, 42svh, 380px); }
   .customizer-panel .text-field input { font-size: 16px; }
 }
+
+/* Consistent upright sans-serif typography throughout the website interface. */
+body, button, input, textarea, select { font-style: normal; }
+em, i, address { font-style: normal; }
+h1, h2, h3, h4, h5, h6 { font-family: var(--sans); letter-spacing: -.02em; }
+.hero h1 { font-size: clamp(42px, 5.5vw, 76px); line-height: 1.12; letter-spacing: -.035em; }
+.section-heading h2, .story-copy h2, .how-copy h2, .gifting-cta h2 {
+  font-size: clamp(32px, 4vw, 56px); line-height: 1.16; letter-spacing: -.025em;
+}
+.customizer-product-info h1, .control-heading h1 { line-height: 1.2; }
+@media (max-width: 560px) {
+  .hero h1 { font-size: clamp(34px, 9vw, 48px); }
+  .section-heading h2, .story-copy h2, .how-copy h2, .gifting-cta h2 { font-size: clamp(28px, 7.5vw, 38px); }
+}
