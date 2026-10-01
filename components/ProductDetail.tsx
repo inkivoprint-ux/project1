@@ -19,6 +19,7 @@ import { QuantitySelector } from "./QuantitySelector";
 import { hasSupabaseConfiguration } from "@/lib/supabase/config";
 import { refreshSharedProducts } from "@/lib/sharedCatalog";
 import { OrderSupport } from "./OrderSupport";
+import { stockLevel } from "@/lib/productAvailability";
 
 export function ProductDetail({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1);
@@ -62,14 +63,14 @@ export function ProductDetail({ product }: { product: Product }) {
       </section>
       <section className="product-detail-copy" aria-label="Product details">
         <span className="eyebrow">{product.category}</span><h1>{product.name}</h1><p className="product-detail-finish">{product.finish}</p>
-        <p className="product-stock-status">{product.stockQuantity == null ? "" : product.stockQuantity === 0 ? "Out of stock" : `${product.stockQuantity} units in stock`}</p><div className="product-detail-price"><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}<small>per item</small></div>
+        <p className={`product-stock-status ${product.stockQuantity == null ? "" : `stock-${stockLevel(product.stockQuantity)}`}`}>{product.stockQuantity == null ? "" : product.stockQuantity === 0 ? "Out of stock" : `${product.stockQuantity} units in stock`}</p><div className="product-detail-price"><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}<small>per item</small></div>
         <div className="product-description"><h2>About this product</h2><p>{product.description || "Contact the Inkivo team for more information about this product."}</p></div>
         <dl className="product-detail-specs"><div><dt>Finish / specification</dt><dd>{product.finish}</dd></div><div><dt>Personalisation area</dt><dd>{product.printArea.widthMm} × {product.printArea.heightMm} mm</dd></div>{product.views && <div><dt>Available previews</dt><dd>{product.views.map((item) => item.label).join(" / ")}</dd></div>}</dl>
         <fieldset className="purchase-options"><legend>Make it yours</legend>
           <label className={!personalised ? "selected" : ""}><input type="radio" name="personalisation" checked={!personalised} onChange={() => setPersonalised(false)} /><span>Without personalisation<small>Order the product as shown</small></span></label>
           <label className={personalised ? "selected" : ""}><input type="radio" name="personalisation" checked={personalised} onChange={() => setPersonalised(true)} /><span>With personalisation<small>Add your photo, name or text in the editor</small></span><Sparkles size={18} /></label>
         </fieldset>
-        {isTShirt ? <SizeQuantitySelector quantities={sizeQuantities} onChange={setSizeQuantities} /> : <QuantitySelector quantity={quantity} onChange={setQuantity} />}
+        {isTShirt ? <SizeQuantitySelector stock={product.sizeStock} quantities={sizeQuantities} onChange={setSizeQuantities} /> : <QuantitySelector quantity={quantity} onChange={setQuantity} />}
         <div className="purchase-total"><span>Item total</span><strong>{formatPrice(product.price * selectedQuantity)}</strong></div>
         <div className="purchase-buttons">{personalised && selectedQuantity > 0 ? <>
           <Link className="button purchase-secondary" href={`${customizerUrl}&intent=cart`}><ShoppingBag size={18} /> Personalise & add to cart</Link>

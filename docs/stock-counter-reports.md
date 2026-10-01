@@ -33,3 +33,8 @@ Product details and checkout show free shipping/courier and expected delivery in
 Checkout shows the saved server order number before the WhatsApp handoff and asks customers to screenshot or retain it. Local development orders are labelled prepared only. No paid-order claim is made.
 PaymentSupport includes cancelled and processing messages for future Razorpay integration. These are not connected to a payment callback yet: Razorpay remains inactive until approval is explicitly confirmed. A future successful-payment receipt must use the server order_number only after verified payment, never a browser-only success callback.
 
+
+## T-shirt size stock (1 October 2026)
+XS, S, M, L, XL and XXL are supported. Admin Stock has a separate count for every size. Existing aggregate counts remain unchanged until saved; no real stock is guessed. Saving all six counts enables per-size tracking and calculates the aggregate automatically. Online and offline submissions atomically deduct their exact sizes; duplicate retries do not deduct twice. Sold-out sizes are disabled. The size-chart popup uses approximate adult unisex reference measurements in inches, based on Gildan Softstyle sizing documented at https://www.ooshirts.com/guides/Gildan-T-Shirt-Size-Chart-and-Fit-Guide.html . It explicitly says these are not verified measurements of the stocked products.
+Stock counts on product details and size selectors use red below 4, yellow 4–7, green 8 and above.
+

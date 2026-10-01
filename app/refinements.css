@@ -495,3 +495,17 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--sans); letter-spacing: -.02em; }
 .cart-drawer > footer { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
 .cart-line-copy { min-width: 0; }
 .cart-line-copy h3 { overflow-wrap: anywhere; line-height: 1.35; }
+
+.inventory-size-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+.size-chart-trigger { display: block; padding: 8px 0; margin-bottom: 12px; background: none; border: 0; color: var(--green); text-decoration: underline; cursor: pointer; font-size: 14px; }
+.size-chart-overlay { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; }
+.size-chart-backdrop { position: absolute; inset: 0; background: #082d24aa; border: 0; }
+.size-chart-dialog { position: relative; background: white; color: #173d32; padding: 24px; border-radius: 14px; width: min(560px, 100%); max-height: 85dvh; overflow: auto; font-size: 15px; line-height: 1.6; }
+.size-chart-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.size-chart-dialog header button { background: none; border: 0; cursor: pointer; padding: 10px; }
+.size-chart-dialog table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.size-chart-dialog th, .size-chart-dialog td { padding: 10px; border-bottom: 1px solid #dce7e1; text-align: left; }
+
+.stock-low { color: #b91c1c; font-weight: 700; }
+.stock-medium { color: #947000; font-weight: 700; }
+.stock-high { color: #15803d; font-weight: 700; }

@@ -7,6 +7,7 @@ export type Product = {
   price: number;
   compareAt?: number;
   stockQuantity?: number | null;
+  sizeStock?: Record<"XS" | "S" | "M" | "L" | "XL" | "XXL", number> | null;
   image: string;
   views?: Array<{ id: "front" | "back"; label: string; image: string }>;
   finish: string;

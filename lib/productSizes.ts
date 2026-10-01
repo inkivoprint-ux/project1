@@ -1,4 +1,4 @@
-export const T_SHIRT_SIZES = ["S", "M", "L", "XL"] as const;
+export const T_SHIRT_SIZES = ["XS", "S", "M", "L", "XL", "XXL"] as const;
 export type TShirtSize = typeof T_SHIRT_SIZES[number];
 export type SizeQuantities = Record<TShirtSize, number>;
 export const isTShirtSize = (value: unknown): value is TShirtSize => T_SHIRT_SIZES.some((size) => size === value);
@@ -7,10 +7,10 @@ export function isTShirtCategory(category: string) {
 }
 export function assertProductSize(size: unknown, category: string, name: string) {
   if (isTShirtCategory(category)) {
-    if (!isTShirtSize(size)) throw new Error(`Choose a T-shirt size (S, M, L or XL) for ${name}.`);
+    if (!isTShirtSize(size)) throw new Error(`Choose a T-shirt size (XS, S, M, L, XL or XXL) for ${name}.`);
   } else if (size !== undefined) throw new Error(`A T-shirt size cannot be applied to ${name}.`);
 }
-export const emptySizeQuantities = (): SizeQuantities => ({ S: 0, M: 0, L: 0, XL: 0 });
+export const emptySizeQuantities = (): SizeQuantities => ({ XS: 0, S: 0, M: 0, L: 0, XL: 0, XXL: 0 });
 export const totalSizeQuantity = (quantities: SizeQuantities) => T_SHIRT_SIZES.reduce((total, size) => total + quantities[size], 0);
 export function normalizeSizeQuantity(value: string | number) {
   const quantity = Number(value);

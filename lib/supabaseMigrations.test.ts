@@ -29,7 +29,7 @@ beforeAll(async () => {
     alter table storage.objects enable row level security;
     create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:cardinality(string_to_array(name, '/'))-1] $$;
   `);
-  for (const name of ["202609290001_initial_schema.sql", "202609300001_admin_profile_access.sql", "202609300002_order_management.sql", "202609300003_shared_catalogue.sql", "202609300004_order_safety.sql", "202610010001_stock_counter.sql"]) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
+  for (const name of ["202609290001_initial_schema.sql", "202609300001_admin_profile_access.sql", "202609300002_order_management.sql", "202609300003_shared_catalogue.sql", "202609300004_order_safety.sql", "202610010001_stock_counter.sql", "202610010002_size_stock.sql"]) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
   await db.query("insert into auth.users(id) values($1),($2)", [adminId, customerId]);
   await db.query("update public.profiles set role='admin' where id=$1", [adminId]);
   await role("authenticated", adminId);
@@ -137,4 +137,24 @@ describe("inventory and transactional offline sales", () => {
     await expect(db.query("select public.submit_counter_order($1::jsonb)",[JSON.stringify(body("forbidden"))])).rejects.toThrow("Administrator access required");
     await role("anon"); await expect(db.query("select public.set_product_stock($1, 9, 1)",[product.slug])).rejects.toThrow("permission denied");
   });
+});
+
+it("deducts exact size stock, preserves other sizes, and rolls back unavailable sizes", async () => {
+  await role("authenticated", adminId);
+  const shirt = products[3];
+  await db.query("select public.save_storefront_product($1::jsonb)", [JSON.stringify(shirt)]);
+  const counts = { XS: 2, S: 3, M: 4, L: 5, XL: 6, XXL: 7 };
+  await db.query("select public.set_product_size_stock($1,$2::jsonb,null,null)", [shirt.slug, JSON.stringify(counts)]);
+  const document = { idempotencyKey: "size-sale", customerName: "Test", items: [{ slug: shirt.slug, quantity: 2, unitPrice: shirt.price, size: "XXL" }, { slug: shirt.slug, quantity: 1, unitPrice: shirt.price, size: "XS" }] };
+  await db.query("select public.submit_counter_order($1::jsonb)", [JSON.stringify(document)]);
+  const config = async () => (await db.query<{ config: { sizeStock: typeof counts; stockQuantity: number } }>("select storefront_config as config from public.products where slug=$1", [shirt.slug])).rows[0].config;
+  expect((await config()).sizeStock).toEqual({ ...counts, XS: 1, XXL: 5 });
+  expect((await config()).stockQuantity).toBe(24);
+  await db.query("select public.submit_counter_order($1::jsonb)", [JSON.stringify(document)]);
+  expect((await config()).stockQuantity).toBe(24);
+  await expect(db.query("select public.submit_counter_order($1::jsonb)", [JSON.stringify({ ...document, idempotencyKey: "size-oversell", items: [{ ...document.items[0], size: "XS", quantity: 2 }] })])).rejects.toThrow("Insufficient stock for size XS");
+  expect((await config()).stockQuantity).toBe(24);
+  await db.query("select public.save_storefront_product($1::jsonb)", [JSON.stringify({ ...shirt, sizeStock: counts, stockQuantity: 99 })]);
+  expect((await config()).sizeStock.XS).toBe(1);
+  await expect(db.query("select public.set_product_size_stock($1,$2::jsonb,$3::jsonb,24)", [shirt.slug, JSON.stringify(counts), JSON.stringify(counts)])).rejects.toThrow("Stock changed");
 });

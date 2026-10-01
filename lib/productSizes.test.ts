@@ -13,7 +13,7 @@ describe("T-shirt size quantities", () => {
     expect(["T-Shirts", "Tshirt", "T Shirts", "Kids T-Shirts"].every(isTShirtCategory)).toBe(true);
     expect(isTShirtCategory("Travel Mugs")).toBe(false);
     expect(() => assertProductSize(undefined, shirt.category, shirt.name)).toThrow("Choose a T-shirt size");
-    expect(() => assertProductSize("XXL", shirt.category, shirt.name)).toThrow();
+    expect(() => assertProductSize("XXXL", shirt.category, shirt.name)).toThrow();
     expect(() => assertProductSize("S", products[0].category, products[0].name)).toThrow();
     expect(() => assertProductSize("XL", shirt.category, shirt.name)).not.toThrow();
   });
@@ -28,9 +28,9 @@ describe("T-shirt size quantities", () => {
     ]);
   });
   it("does not invent a default size for missing, duplicate or malformed selections", () => {
-    for (const value of [null, "XXL:2", "M:1,M:2", "S:-1", "XL:100", "S:2:3", "M:NaN"]) expect(parseSizeQuantities(value)).toEqual(emptySizeQuantities());
+    for (const value of [null, "XXXL:2", "M:1,M:2", "S:-1", "XL:100", "S:2:3", "M:NaN"]) expect(parseSizeQuantities(value)).toEqual(emptySizeQuantities());
     expect(() => createProductPurchaseEntries(shirt, 1, emptySizeQuantities())).toThrow("at least one");
-    expect(() => createProductPurchaseEntries(shirt, 1, { S: -1, M: 2, L: 0, XL: 0 })).toThrow();
+    expect(() => createProductPurchaseEntries(shirt, 1, { XS: 0, XXL: 0, S: -1, M: 2, L: 0, XL: 0 })).toThrow();
     expect(["", "2.9", "100", "-1", "bad"].map(normalizeSizeQuantity)).toEqual([0, 2, 99, 0, 0]);
     expect(createProductPurchaseEntries(products[0], 3)).toEqual([{ productId: products[0].id, quantity: 3 }]);
   });
@@ -43,7 +43,7 @@ describe("T-shirt size quantities", () => {
     expect(() => changeCartEntrySize([{ ...cart[0], quantity: 99 }, cart[1]], shirt.id, "M", "design", "S")).toThrow("exceed 99");
   });
   it("preserves size quantities through order validation, saved records and WhatsApp", () => {
-    const payload = parseOrderPayload({ customerName: "Validation only", phone: "9999999999", address: "Validation only", subtotal: shirt.price * 5, items: createProductPurchaseEntries(shirt, 1, { S: 2, M: 0, L: 0, XL: 3 }).map((entry) => ({ ...entry, productName: shirt.name, unitPrice: shirt.price, assets: [] })) });
+    const payload = parseOrderPayload({ customerName: "Validation only", phone: "9999999999", address: "Validation only", subtotal: shirt.price * 5, items: createProductPurchaseEntries(shirt, 1, { XS: 0, XXL: 0, S: 2, M: 0, L: 0, XL: 3 }).map((entry) => ({ ...entry, productName: shirt.name, unitPrice: shirt.price, assets: [] })) });
     const order: OrderRecord = { ...payload, id: "validation-only", orderNumber: "validation-only", status: "local", storageMode: "local", createdAt: "2026-09-30T00:00:00.000Z" };
     expect(parseSavedOrder(order)?.items.map((item) => [item.size, item.quantity])).toEqual([["S", 2], ["XL", 3]]);
     const message = buildWhatsAppOrderMessage(order);
