@@ -213,13 +213,21 @@ export async function submitCartOrder(args: { cart: CartEntry[]; products: Produ
     const { createClient } = await import("./supabase/client");
     const storage = createClient().storage.from("order-assets");
     const receipts: import("./stagedOrderUploads").StagedUpload[] = [];
-    for (const upload of uploadResult.uploads as Array<{ receipt: import("./stagedOrderUploads").StagedUpload; token: string }>) {
-      const file = formData.get(upload.receipt.key);
-      if (!(file instanceof File)) throw new Error("A prepared artwork file is missing.");
-      const result = await storage.uploadToSignedUrl(upload.receipt.path, upload.token, file, { contentType: file.type });
-      if (result.error) throw new Error("Artwork upload failed. Check your connection and retry this checkout.");
-      receipts.push(upload.receipt);
-      formData.delete(upload.receipt.key);
+    const uploads = uploadResult.uploads as Array<{ receipt: import("./stagedOrderUploads").StagedUpload; token: string }>;
+    // Limit simultaneous uploads on phones, and settle the batch before reporting failure.
+    for (let offset = 0; offset < uploads.length; offset += 3) {
+      const batch = await Promise.allSettled(uploads.slice(offset, offset + 3).map(async (upload) => {
+        const file = formData.get(upload.receipt.key);
+        if (!(file instanceof File)) throw new Error("A prepared artwork file is missing.");
+        const result = await storage.uploadToSignedUrl(upload.receipt.path, upload.token, file, { contentType: file.type });
+        if (result.error) throw new Error("Artwork upload failed. Check your connection and retry this checkout.");
+        return upload.receipt;
+      }));
+      for (const result of batch) {
+        if (result.status === "fulfilled") { receipts.push(result.value); formData.delete(result.value.key); }
+      }
+      const failure = batch.find((result) => result.status === "rejected");
+      if (failure?.status === "rejected") throw failure.reason;
     }
     formData.set("stagedAssets", JSON.stringify(receipts));
   } else assertOrderUploadBudget(payload, checkoutFiles.map(([, file]) => file));
