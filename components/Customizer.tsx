@@ -39,6 +39,43 @@ const anekMalayalam = localFont({
   adjustFontFallback: false,
 });
 
+// Google Fonts are bundled locally so previews and exports use the same files.
+const manjari = localFont({
+  src: [
+    { path: "../public/fonts/Manjari-Regular.ttf", weight: "400", style: "normal" },
+    { path: "../public/fonts/Manjari-Bold.ttf", weight: "700", style: "normal" },
+  ], display: "swap", adjustFontFallback: false, preload: false,
+});
+const chilanka = localFont({
+  src: "../public/fonts/Chilanka-Regular.ttf", weight: "400", style: "normal",
+  display: "swap", adjustFontFallback: false, preload: false,
+});
+const gayathri = localFont({
+  src: [
+    { path: "../public/fonts/Gayathri-Regular.ttf", weight: "400", style: "normal" },
+    { path: "../public/fonts/Gayathri-Bold.ttf", weight: "700", style: "normal" },
+  ], display: "swap", adjustFontFallback: false, preload: false,
+});
+const balooMalayalam = localFont({
+  src: "../public/fonts/BalooChettan2[wght].ttf", weight: "400 800", style: "normal",
+  display: "swap", adjustFontFallback: false, preload: false,
+});
+const notoSerifMalayalam = localFont({
+  src: "../public/fonts/NotoSerifMalayalam[wght].ttf", weight: "100 900", style: "normal",
+  display: "swap", adjustFontFallback: false, preload: false,
+});
+const malayalamFonts = {
+  malayalam: { label: "Anek Malayalam", family: anekMalayalam.style.fontFamily },
+  manjari: { label: "Manjari", family: manjari.style.fontFamily },
+  chilanka: { label: "Chilanka", family: chilanka.style.fontFamily },
+  gayathri: { label: "Gayathri", family: gayathri.style.fontFamily },
+  "baloo-malayalam": { label: "Baloo Chettan 2", family: balooMalayalam.style.fontFamily },
+  "noto-serif-malayalam": { label: "Noto Serif Malayalam", family: notoSerifMalayalam.style.fontFamily },
+};
+function getMalayalamFont(font: TextFont) {
+  return font in malayalamFonts ? malayalamFonts[font as keyof typeof malayalamFonts] : undefined;
+}
+
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export function Customizer({ product }: { product: Product }) {
@@ -91,8 +128,9 @@ export function Customizer({ product }: { product: Product }) {
   const artworkRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState>(null);
   const textStyle = getTextStyle(font, textBold, textItalic);
-  const malayalamFontKey = `${textStyle.italic ? "italic " : ""}${textStyle.weight} 48px ${anekMalayalam.style.fontFamily}`;
-  const waitingForTextFont = font === "malayalam" && Boolean(text.trim()) && (malayalamFontStatus !== "ready" || loadedMalayalamFont !== malayalamFontKey);
+  const selectedMalayalamFont = getMalayalamFont(font);
+  const malayalamFontKey = `${textStyle.italic ? "italic " : ""}${textStyle.weight} 48px ${selectedMalayalamFont?.family ?? anekMalayalam.style.fontFamily}`;
+  const waitingForTextFont = Boolean(selectedMalayalamFont) && Boolean(text.trim()) && (malayalamFontStatus !== "ready" || loadedMalayalamFont !== malayalamFontKey);
   const textArtwork = useMemo(() => typeof document === "undefined" || !text.trim() || waitingForTextFont ? null : createTextArtwork(text, textColor, font, textSize, textStyle.weight, textStyle.italic), [text, textColor, font, textSize, textStyle.weight, textStyle.italic, waitingForTextFont]);
   const waitingForTextRender = Boolean(template.tools.text && textArtwork && textRenderState !== "ready");
   const waitingForImageRender = Boolean(template.tools.images && imageUrl && imageRenderState !== "ready");
@@ -112,12 +150,13 @@ export function Customizer({ product }: { product: Product }) {
   }, [allowsBackView, isTShirt]);
 
   useEffect(() => {
+    if (!selectedMalayalamFont) return;
     let cancelled = false;
     document.fonts.load(malayalamFontKey, "മലയാളം")
       .then((loadedFonts) => { if (!cancelled) { setLoadedMalayalamFont(malayalamFontKey); setMalayalamFontStatus(loadedFonts.length ? "ready" : "error"); } })
       .catch(() => { if (!cancelled) setMalayalamFontStatus("error"); });
     return () => { cancelled = true; };
-  }, [malayalamFontKey]);
+  }, [malayalamFontKey, selectedMalayalamFont]);
 
   useEffect(() => {
     const refresh = () => setTemplate(loadCustomerTemplate(product));
@@ -392,8 +431,8 @@ export function Customizer({ product }: { product: Product }) {
           ) : template.tools.text ? (
             <div className="tool-content">
               <h2>Add realistic text</h2><p>Choose your font, style, opacity, and surface effect. Drag text anywhere in the same print area as your photo.</p>
-              <label className="text-field"><span>Your text</span><input value={text} maxLength={40} placeholder={font === "malayalam" ? "നിങ്ങളുടെ സന്ദേശം" : "Type your message"} lang={font === "malayalam" ? "ml" : undefined} style={font === "malayalam" ? anekMalayalam.style : undefined} onChange={(event) => setText(event.target.value)} /><small>{text.length}/40</small></label>
-              <div className="font-options"><span>Font</span><div><button className={font === "classic" ? "active" : ""} aria-pressed={font === "classic"} onClick={() => setFont("classic")}>Classic</button><button className={font === "clean" ? "active" : ""} aria-pressed={font === "clean"} onClick={() => setFont("clean")}>Clean</button><button className={font === "playful" ? "active" : ""} aria-pressed={font === "playful"} onClick={() => setFont("playful")}>Playful</button><button className={font === "malayalam" ? "active" : ""} aria-pressed={font === "malayalam"} style={anekMalayalam.style} onClick={() => setFont("malayalam")}>Malayalam (Anek)</button></div></div>
+              <label className="text-field"><span>Your text</span><input value={text} maxLength={40} placeholder={selectedMalayalamFont ? "നിങ്ങളുടെ സന്ദേശം" : "Type your message"} lang={selectedMalayalamFont ? "ml" : undefined} style={selectedMalayalamFont ? { fontFamily: selectedMalayalamFont.family } : undefined} onChange={(event) => setText(event.target.value)} /><small>{text.length}/40</small></label>
+              <div className="font-options"><span>Font</span><div><button className={font === "classic" ? "active" : ""} aria-pressed={font === "classic"} onClick={() => setFont("classic")}>Classic</button><button className={font === "clean" ? "active" : ""} aria-pressed={font === "clean"} onClick={() => setFont("clean")}>Clean</button><button className={font === "playful" ? "active" : ""} aria-pressed={font === "playful"} onClick={() => setFont("playful")}>Playful</button>{Object.entries(malayalamFonts).map(([fontId, option]) => <button key={fontId} className={font === fontId ? "active" : ""} aria-pressed={font === fontId} onClick={() => setFont(fontId as TextFont)}><span lang="ml" className="malayalam-font-sample" style={{ fontFamily: option.family }}>മലയാളം</span><span>{option.label}</span></button>)}</div></div>
               <div className="font-options text-style-options" role="group" aria-label="Text style"><span>Style</span><div><button className={textStyle.weight >= 600 ? "active" : ""} aria-pressed={textStyle.weight >= 600} onClick={() => setTextBold(textStyle.weight < 600)}><strong>Bold</strong></button><button className={textStyle.italic ? "active" : ""} aria-pressed={textStyle.italic} onClick={() => setTextItalic(!textStyle.italic)}><em>Italic</em></button></div></div>
               <div className="font-options" role="group" aria-label="Text surface"><span>Surface effect</span><div>{([ ["product", "Product default"], ["normal", "Normal"], ["wrinkled", "Wrinkled"], ["cylindrical", "Cylindrical"] ] as const).map(([value, label]) => <button key={value} className={textSurface === value ? "active" : ""} aria-pressed={textSurface === value} onClick={() => setTextSurface(value)}>{label}</button>)}</div></div>
               {textSurface === "wrinkled" && <>
@@ -407,7 +446,7 @@ export function Customizer({ product }: { product: Product }) {
                 <TextEffectSlider label="Perspective / Depth" value={textDeformation.perspective} min={-35} max={35} suffix="°" onChange={(perspective) => setTextDeformation((current) => ({ ...current, perspective }))} />
               </>}
               <label className="control-row"><span>Text opacity <output>{textOpacity}%</output></span><input aria-label="Text opacity" type="range" min="0" max="100" step="1" value={textOpacity} onChange={(event) => setTextOpacity(Number(event.target.value))} /></label>
-              {font === "malayalam" && (malayalamFontStatus !== "ready" || loadedMalayalamFont !== malayalamFontKey) && <p className="editor-message" role="status">{malayalamFontStatus === "error" ? "The Malayalam font could not load. Please reload the page and try again." : "Loading Malayalam font…"}</p>}
+              {Boolean(selectedMalayalamFont) && (malayalamFontStatus !== "ready" || loadedMalayalamFont !== malayalamFontKey) && <p className="editor-message" role="status">{malayalamFontStatus === "error" ? "The Malayalam font could not load. Please reload the page and try again." : "Loading Malayalam font…"}</p>}
               <label className="control-row"><span><Type size={16} /> Text size <output>{textSize}</output></span><input type="range" min="12" max="72" step="1" value={textSize} onChange={(event) => setTextSize(Number(event.target.value))} /></label>
               {template.tools.allowMove && <div className="position-grid"><NumberControl label="Horizontal" value={textX} onChange={setTextX} /><NumberControl label="Vertical" value={textY} onChange={setTextY} /></div>}
               {template.tools.allowRotate && <label className="control-row"><span><RotateCcw size={16} /> Rotation <output>{textRotation}°</output></span><input type="range" min="-180" max="180" step="1" value={textRotation} onChange={(event) => setTextRotation(Number(event.target.value))} /></label>}
@@ -441,7 +480,7 @@ function createTextArtwork(text: string, color: string, font: TextFont, size: nu
   canvas.height = 720;
   const context = canvas.getContext("2d");
   if (!context) return null;
-  const family = font === "malayalam" ? anekMalayalam.style.fontFamily : font === "clean" ? "Arial, sans-serif" : "Georgia, serif";
+  const family = getMalayalamFont(font)?.family ?? (font === "clean" ? "Arial, sans-serif" : "Georgia, serif");
   const style = `${italic ? "italic " : ""}${weight}`;
   let pixelSize = size * 4.2;
   context.font = `${style} ${pixelSize}px ${family}`;

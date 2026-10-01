@@ -1,6 +1,6 @@
 import type { TemplateArea } from "./customization";
 
-export type TextFont = "classic" | "clean" | "playful" | "malayalam";
+export type TextFont = "classic" | "clean" | "playful" | "malayalam" | "manjari" | "chilanka" | "gayathri" | "baloo-malayalam" | "noto-serif-malayalam";
 export type TextSurface = "product" | "normal" | "wrinkled" | "cylindrical";
 
 export function getTextStyle(font: TextFont, bold: boolean | null, italic: boolean | null) {

@@ -402,3 +402,5 @@ section[id] { scroll-margin-top: 100px; }
   .mobile-menu-support a > svg:last-child { margin-left: auto; }
   .mobile-menu-support > small { display: block; text-align: center; font-size: 11px; color: var(--muted); margin-top: 14px; }
 }
+
+.font-options .malayalam-font-sample { display: block; font-size: 22px; line-height: 1.6; font-weight: 400; margin-bottom: 4px; }
