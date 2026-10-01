@@ -9,6 +9,7 @@ import { createDefaultTemplate, validateTemplate, type TemplateConfig } from "@/
 import { assertProductSize } from "@/lib/productSizes";
 import { hasSupabaseConfiguration, serverSupabaseKey } from "@/lib/supabase/config";
 import { assertSameOrigin, readLimitedBody } from "@/lib/httpSafety";
+import { assertSafeTextEps } from "@/lib/textEps";
 
 const orderSelect = "id, order_number, customer_name, phone, shipping_address, subtotal, created_at, state, updated_at, completed_at, deleted_at, request_hash, order_items(product_id, product_name_snapshot, variant_snapshot, quantity, unit_price, order_customizations(editable_state, generated_files(kind, original_filename, mime_type, storage_path)))";
 
@@ -27,11 +28,16 @@ export async function POST(request: Request) {
     const bytes = await readLimitedBody(request, MAX_ORDER_REQUEST_BYTES);
     formData = await new Response(bytes, { headers: { "Content-Type": request.headers.get("content-type") || "" } }).formData();
     payload = parseOrderPayload(JSON.parse(String(formData.get("payload") || "{}")));
+    if (payload.salesChannel === "offline") {
+      const session = await getAdminSession();
+      if (session.error) return Response.json({ error: session.error }, { status: session.status });
+    }
     orderFiles = collectOrderFiles(payload, formData);
     if (!payload.idempotencyKey) throw new Error("Refresh this checkout before submitting.");
     for (const file of orderFiles.values()) {
+      if (file.type === "application/postscript") assertSafeTextEps(await file.text());
       const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-      const valid = file.type === "image/png" ? [137,80,78,71,13,10,26,10].every((byte, index) => header[index] === byte) : file.type === "image/jpeg" ? header[0] === 255 && header[1] === 216 && header[2] === 255 : new TextDecoder().decode(header.slice(0, 4)) === "RIFF" && new TextDecoder().decode(header.slice(8, 12)) === "WEBP";
+      const valid = file.type === "application/postscript" ? new TextDecoder().decode(header).startsWith("%!PS-Adobe-") && file.name.endsWith(".eps") : file.type === "image/png" ? [137,80,78,71,13,10,26,10].every((byte, index) => header[index] === byte) : file.type === "image/jpeg" ? header[0] === 255 && header[1] === 216 && header[2] === 255 : new TextDecoder().decode(header.slice(0, 4)) === "RIFF" && new TextDecoder().decode(header.slice(8, 12)) === "WEBP";
       if (!valid) throw new Error("An uploaded file does not contain a supported image.");
     }
   } catch (error) {
@@ -54,9 +60,11 @@ export async function POST(request: Request) {
     // Vercel overwrites X-Forwarded-For. Do not trust arbitrary forwarded headers elsewhere.
     const address = process.env.VERCEL ? request.headers.get("x-forwarded-for")?.split(",")[0].trim() : "local-server";
     const identifier = createHmac("sha256", serviceKey).update(address || "unknown-client").digest("hex");
-    const limit = await supabase.rpc("consume_order_attempt", { identifier_hash: identifier });
-    if (limit.error) throw limit.error;
-    if (limit.data !== true) return Response.json({ error: "Too many order attempts. Please wait ten minutes or contact Inkivo." }, { status: 429, headers: { "Retry-After": "600" } });
+    if (payload.salesChannel !== "offline") {
+      const limit = await supabase.rpc("consume_order_attempt", { identifier_hash: identifier });
+      if (limit.error) throw limit.error;
+      if (limit.data !== true) return Response.json({ error: "Too many order attempts. Please wait ten minutes or contact Inkivo." }, { status: 429, headers: { "Retry-After": "600" } });
+    }
     const validatedProducts = [];
     // Validate all prices/categories/templates before creating an order record.
     for (const item of payload.items) {
@@ -83,7 +91,7 @@ export async function POST(request: Request) {
       customer_name: payload.customerName.trim(),
       phone: payload.phone.trim(),
       whatsapp: payload.phone.trim(),
-      shipping_address: { address: payload.address.trim() },
+      shipping_address: { address: payload.address.trim(), salesChannel: payload.salesChannel ?? "online" },
       state: "uploading",
       subtotal: payload.subtotal,
       total: payload.subtotal,
@@ -152,7 +160,7 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    const order: OrderRecord = { id: orderRow.id, orderNumber, customerName: payload.customerName.trim(), phone: payload.phone.trim(), address: payload.address.trim(), subtotal: payload.subtotal, status: "submitted", storageMode: "supabase", createdAt: orderRow.created_at, items: completedItems };
+    const order: OrderRecord = { salesChannel: payload.salesChannel ?? "online", id: orderRow.id, orderNumber, customerName: payload.customerName.trim(), phone: payload.phone.trim(), address: payload.address.trim(), subtotal: payload.subtotal, status: "submitted", storageMode: "supabase", createdAt: orderRow.created_at, items: completedItems };
     return Response.json({ order }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (failure) {
     if (failure && typeof failure === "object" && "message" in failure && String(failure.message).includes("Insufficient stock")) return Response.json({ error: "Insufficient stock. Refresh products and reduce the quantity before ordering." }, { status: 409 });
@@ -167,6 +175,9 @@ export async function GET(request: Request) {
     if (session.error) return Response.json({ error: session.error }, { status: session.status });
     let query = session.client.from("orders").select("id, order_number, customer_name, phone, shipping_address, subtotal, created_at, state, updated_at, completed_at, deleted_at, order_items(product_id, product_name_snapshot, variant_snapshot, quantity, unit_price, order_customizations(editable_state, generated_files(kind, original_filename, mime_type, storage_path)))").not("state", "in", "(draft,uploading,processing,failed)");
     if (new URL(request.url).searchParams.get("includeDeleted") !== "true") query = query.is("deleted_at", null);
+    const channel = new URL(request.url).searchParams.get("channel");
+    if (channel === "offline") query = query.eq("shipping_address->>salesChannel", "offline");
+    if (channel === "online") query = query.or("shipping_address->>salesChannel.is.null,shipping_address->>salesChannel.eq.online");
     const { data, error } = await query.order("created_at", { ascending: false }).limit(200);
     if (error) throw error;
     return Response.json({ orders: (data as unknown as CloudOrderRow[]).map(cloudOrderRecord) }, { headers: { "Cache-Control": "private, no-store" } });

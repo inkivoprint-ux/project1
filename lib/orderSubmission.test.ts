@@ -109,6 +109,15 @@ describe("two-image order files", () => {
   });
   it("rejects duplicate image slots and extra composite layers", () => {
     expect(() => parseOrderPayload({ ...payload, items: [{ ...payload.items[0], assets: [...originals.map((asset) => ({ ...asset, slot: 0 })), ...payload.items[0].assets] }] })).toThrow("Duplicate");
-    expect(() => parseOrderPayload({ ...payload, items: [{ ...payload.items[0], assets: [...payload.items[0].assets, { ...payload.items[0].assets[0], slot: 1 }] }] })).toThrow("Duplicate");
+    expect(() => parseOrderPayload({ ...payload, items: [{ ...payload.items[0], assets: [...payload.items[0].assets, { ...payload.items[0].assets[0], slot: 2 }] }] })).toThrow("Duplicate");
   });
+});
+
+it("accepts both-side composites and dedicated EPS text files with offline blank phone", () => {
+  const sideAssets = [...payload.items[0].assets, ...payload.items[0].assets.map((asset) => ({ ...asset, slot: 1, fileName: `back-${asset.fileName}` })), ...[4,5].map((slot)=>({ kind: 'original' as const, slot, fileName: `text-${slot}.eps`, mimeType: 'application/postscript', designId: 'design-1' }))];
+  const parsed = parseOrderPayload({ ...payload, salesChannel: 'offline', phone: '', items: [{ ...payload.items[0], assets: sideAssets }] });
+  const form = new FormData(); sideAssets.forEach((asset)=>form.append(`asset:0:${asset.kind}${'slot' in asset && asset.slot ? `:${asset.slot}` : ''}`, new File(['file'],asset.fileName,{type:asset.mimeType})));
+  expect(collectOrderFiles(parsed,form).size).toBe(6);
+  expect(()=>parseOrderPayload({...payload,phone:''})).toThrow('WhatsApp');
+  expect(()=>parseOrderPayload({...payload,items:[{...payload.items[0],assets:[...payload.items[0].assets,{...sideAssets[4],slot:1}]}]})).toThrow('dedicated');
 });

@@ -43,7 +43,8 @@ export function ProductDetail({ product }: { product: Product }) {
     return () => { window.clearTimeout(timer); unsubscribeCart(); unsubscribeProducts(); };
   }, []);
 
-  const image = product.views?.find((item) => item.id === view)?.image ?? product.image;
+  const views = [...(product.views ?? [{ id: "front" as const, label: "Front", image: product.image }]), ...(isTShirt && !product.views?.some((entry) => entry.id === "back") ? [{ id: "back" as const, label: "Back (reference preview)", image: "/products/tshirt-back.png" }] : [])];
+  const image = views.find((item) => item.id === view)?.image ?? product.image;
   const customizerUrl = `/customize/${product.slug}?quantity=${selectedQuantity}&personalise=1&view=${view}${isTShirt ? `&sizes=${encodeURIComponent(serializeSizeQuantities(sizeQuantities))}` : ""}`;
   function addToCart() {
     try { setCart(addCartEntries(createProductPurchaseEntries(product, quantity, sizeQuantities))); setCartOpen(true); setError(""); showSuccess("Added to cart successfully."); }
@@ -59,7 +60,7 @@ export function ProductDetail({ product }: { product: Product }) {
     <main id="main-content" className="container product-detail-layout">
       <section className="product-detail-gallery" aria-label="Product images">
         <div className="product-detail-image">{product.badge && <span className="product-badge">{product.badge}</span>}<Image src={image} alt={`${product.name}${product.views ? ` · ${view}` : ""}`} fill sizes="(max-width: 900px) 90vw, 50vw" preload unoptimized={image.startsWith("data:")} /></div>
-        {product.views && <div className="view-switch">{product.views.map((item) => <button key={item.id} aria-pressed={view === item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}>{item.label}</button>)}</div>}
+        {views.length > 1 && <div className="view-switch">{views.map((item) => <button key={item.id} aria-pressed={view === item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}>{item.label}</button>)}</div>}
       </section>
       <section className="product-detail-copy" aria-label="Product details">
         <span className="eyebrow">{product.category}</span><h1>{product.name}</h1><p className="product-detail-finish">{product.finish}</p>

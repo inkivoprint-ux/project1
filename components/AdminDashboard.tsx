@@ -159,7 +159,7 @@ export function AdminDashboard() {
             </div>
           </section>
           <AdminInventory products={catalogue} />
-          <AdminOrders onCount={setOrderCount} />
+          <AdminOrders onCount={setOrderCount} /><AdminOrders channel="offline" />
           <AdminSalesReports />
           <section className="admin-card settings-card" id="settings"><div className="admin-card-head"><div><h2>Workspace settings</h2></div></div><div className="settings-content"><p><strong>Storage:</strong> {cloud ? "Shared Supabase catalogue and private order files." : "Development-only storage on this device."}</p><p><strong>Online checkout:</strong> WhatsApp remains active. Razorpay is awaiting approval.</p><p><strong>Artwork:</strong> review supplied originals and selected-side previews before printing.</p><p><a href={contact.telephone}>{contact.phone}</a> · <a href={contact.emailLink}>{contact.email}</a></p></div></section>
         </div>

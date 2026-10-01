@@ -9,7 +9,7 @@ import { buildOrderZip } from "@/lib/orderZip";
 import type { OrderManagementAction } from "@/lib/orderManagement";
 import { useDialog } from "@/lib/useDialog";
 
-export function AdminOrders({ onCount }: { onCount?: (count: number) => void }) {
+export function AdminOrders({ onCount, channel = "online" }: { onCount?: (count: number) => void; channel?: "online" | "offline" }) {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -18,19 +18,19 @@ export function AdminOrders({ onCount }: { onCount?: (count: number) => void }) 
   const refresh = () => setReload((current) => current + 1);
   useEffect(() => {
     let cancelled = false;
-    loadAdminOrders(true).then((next) => { if (!cancelled) { setOrders(next); onCount?.(next.filter((order) => !order.deletedAt).length); setError(""); setLoading(false); } }).catch((failure) => { if (!cancelled) { setError(failure instanceof Error ? failure.message : "Orders could not be loaded."); setLoading(false); } });
+    loadAdminOrders(true, channel).then((next) => { if (!cancelled) { setOrders(next.filter((order) => (order.salesChannel ?? "online") === channel)); onCount?.(next.filter((order) => !order.deletedAt).length); setError(""); setLoading(false); } }).catch((failure) => { if (!cancelled) { setError(failure instanceof Error ? failure.message : "Orders could not be loaded."); setLoading(false); } });
     const unsubscribe = subscribeToOrders(() => setReload((current) => current + 1));
     return () => { cancelled = true; unsubscribe(); };
-  }, [reload, onCount]);
+  }, [reload, onCount, channel]);
 
-  if (loading) return <section className="admin-card admin-empty" id="orders" role="status"><LoaderCircle className="spin" /><p>Loading orders…</p></section>;
-  if (error) return <section className="admin-card admin-empty" id="orders"><CircleAlert /><h2>Orders unavailable</h2><p role="alert">{error}</p><button type="button" onClick={refresh}>Try again</button></section>;
+  if (loading) return <section className="admin-card admin-empty" id={channel === "offline" ? "offline-orders" : "orders"} role="status"><LoaderCircle className="spin" /><p>Loading orders…</p></section>;
+  if (error) return <section className="admin-card admin-empty" id={channel === "offline" ? "offline-orders" : "orders"}><CircleAlert /><h2>Orders unavailable</h2><p role="alert">{error}</p><button type="button" onClick={refresh}>Try again</button></section>;
 
-  if (!orders.length) return <section className="admin-card admin-empty" id="orders"><ShoppingBag /><h2>No orders yet</h2><p>Orders saved during checkout will appear here with their artwork files.</p><button type="button" onClick={refresh}>Refresh orders</button></section>;
+  if (!orders.length) return <section className="admin-card admin-empty" id={channel === "offline" ? "offline-orders" : "orders"}><ShoppingBag /><h2>No orders yet</h2><p>Orders saved during checkout will appear here with their artwork files.</p><button type="button" onClick={refresh}>Refresh orders</button></section>;
 
   const visibleOrders = orders.filter((order) => Boolean(order.deletedAt) === showTrash);
-  return <section className="admin-orders" id="orders">
-    <header><div><span className="admin-kicker">ORDER WORKSPACE</span><h2>{showTrash ? "Order Trash" : "Recent WhatsApp orders"}</h2><p>{showTrash ? "Restore a trashed order, or delete it permanently to remove its records and artwork files and free storage." : "Mark finished work completed, then delete it to Trash. Cloud mode shows the latest 200 records."}</p></div><button type="button" onClick={refresh}>Refresh orders</button></header>
+  return <section className="admin-orders" id={channel === "offline" ? "offline-orders" : "orders"}>
+    <header><div><span className="admin-kicker">ORDER WORKSPACE</span><h2>{showTrash ? "Order Trash" : channel === "offline" ? "Offline counter orders" : "Online orders"}</h2><p>{showTrash ? "Restore a trashed order, or delete it permanently to remove its records and artwork files and free storage." : "Mark finished work completed, then delete it to Trash. Cloud mode shows the latest 200 records."}</p></div><button type="button" onClick={refresh}>Refresh orders</button></header>
     <div className="order-view-tabs" role="group" aria-label="Order list"><button type="button" aria-pressed={!showTrash} onClick={() => setShowTrash(false)}>Orders ({orders.filter((order) => !order.deletedAt).length})</button><button type="button" aria-pressed={showTrash} onClick={() => setShowTrash(true)}><Trash2 size={15} /> Trash ({orders.filter((order) => order.deletedAt).length})</button></div>
     {!visibleOrders.length && <div className="admin-card admin-empty"><ShoppingBag /><h2>{showTrash ? "Trash is empty" : "No active orders"}</h2><p>{showTrash ? "Deleted completed orders will appear here." : "Saved checkout orders will appear here. Deleted orders can be restored from Trash."}</p></div>}
     {visibleOrders.map((order) => <article className="admin-order-card" key={order.id}>
@@ -105,8 +105,8 @@ function OrderAssetTile({ order, itemIndex, asset, onDeleted }: { order: OrderRe
     }
   };
   return <div className="order-asset-tile">
-    <div>{url ? <Image src={url} alt={`${asset.kind} order file`} width={70} height={70} unoptimized onError={() => setError("This order file could not be opened. Refresh orders or check the administrator session.")} /> : <FileImage />}</div>
-    <span>{asset.kind === "edited" ? "Cropped image" : asset.kind === "original" ? "Original upload" : "Product preview"}</span>
+    <div>{url && asset.mimeType !== "application/postscript" ? <Image src={url} alt={`${asset.kind} order file`} width={70} height={70} unoptimized onError={() => setError("This order file could not be opened. Refresh orders or check the administrator session.")} /> : <FileImage />}</div>
+    <span>{asset.mimeType === "application/postscript" ? "Text artwork · EPS vector" : asset.kind === "edited" ? "Composite reference" : asset.kind === "original" ? "Original upload" : "Product preview"}</span>
     <small title={asset.fileName}>{asset.fileName}</small>
     <div className="order-asset-actions">{url && <a href={url} download={asset.fileName}><Download /> Download</a>}<button type="button" onClick={remove} disabled={deleting || Boolean(order.deletedAt)} title={order.deletedAt ? "Restore the order before deleting an individual file" : undefined}>{deleting ? <LoaderCircle className="spin" /> : <Trash2 />} Delete file</button></div>
     {error && <p className="order-asset-error" title={error} role="alert"><CircleAlert /> {error}</p>}

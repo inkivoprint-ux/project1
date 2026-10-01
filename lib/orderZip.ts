@@ -13,9 +13,9 @@ export function orderDetailsText(order: OrderRecord) {
     ...order.items.flatMap((item, index) => [
       `${index + 1}. ${item.productName}${item.size ? ` | Size: ${item.size}` : ""}`,
       `Quantity: ${item.quantity} | Unit price: INR ${item.unitPrice.toFixed(2)} | Item total: INR ${(item.quantity * item.unitPrice).toFixed(2)}`,
-      `Print side: ${item.configuration?.view === "back" ? "Back" : "Front"}`,
+      `Print side: ${item.configuration?.sides ? Object.keys(item.configuration.sides as Record<string, unknown>).join(" + ") : item.configuration?.view === "back" ? "Back" : "Front"}`,
       `Artwork files: ${item.assets.length}`,
-      ...item.assets.map((asset, fileIndex) => `  ${fileIndex + 1}. ${asset.kind === "edited" ? "Print artwork" : asset.kind === "preview" ? "Product preview" : "Original upload"}: ${asset.fileName}`),
+      ...item.assets.map((asset, fileIndex) => `  ${fileIndex + 1}. ${asset.mimeType === "application/postscript" ? "Outlined text EPS" : asset.kind === "edited" ? "Composite artwork reference" : asset.kind === "preview" ? "Product preview" : "Original upload"}: ${asset.fileName}`),
       "",
     ]),
     `ORDER TOTAL: INR ${order.subtotal.toFixed(2)}`,

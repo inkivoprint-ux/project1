@@ -2,12 +2,12 @@ import { z } from "zod";
 import type { OrderItemRecord } from "./orders";
 import { T_SHIRT_SIZES } from "./productSizes";
 
-const supportedMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
+const supportedMimeTypes = ["image/jpeg", "image/png", "image/webp", "application/postscript"] as const;
 const assetKinds = ["original", "edited", "preview"] as const;
 
 const assetSchema = z.object({
   kind: z.enum(assetKinds),
-  slot: z.number().int().min(0).max(1).optional(),
+  slot: z.number().int().min(0).max(5).optional(),
   fileName: z.string().min(1).max(180).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/).refine((name) => !name.includes("..")),
   mimeType: z.enum(supportedMimeTypes),
   storagePath: z.string().optional(),
@@ -23,19 +23,21 @@ const itemSchema = z.object({
   unitPrice: z.number().finite().nonnegative(),
   designId: z.string().min(1).max(180).optional(),
   configuration: z.record(z.unknown()).optional(),
-  assets: z.array(assetSchema).max(4),
+  assets: z.array(assetSchema).max(10),
 });
 
 const payloadSchema = z.object({
   idempotencyKey: z.string().uuid().optional(),
   customerName: z.string().trim().min(1).max(160),
-  phone: z.string().trim().max(40).regex(/^\+?[\d\s()-]+$/).refine((value) => { const digits = value.replace(/\D/g, ""); return digits.length >= 10 && digits.length <= 15; }),
+  phone: z.string().trim().max(40).refine((value) => value === "" || (/^\+?[\d\s()-]+$/.test(value) && value.replace(/\D/g, "").length >= 10 && value.replace(/\D/g, "").length <= 15)),
+  salesChannel: z.enum(["online", "offline"]).optional(),
   address: z.string().trim().min(1).max(2_000),
   subtotal: z.number().finite().nonnegative(),
   items: z.array(itemSchema).min(1).max(99),
 });
 
 export type OrderPayload = {
+  salesChannel?: "online" | "offline";
   idempotencyKey?: string;
   customerName: string;
   phone: string;
@@ -54,13 +56,23 @@ export function assertOrderUploadBudget(payload: unknown, files: Array<{ size: n
 export function parseOrderPayload(value: unknown): OrderPayload {
   const parsed = payloadSchema.safeParse(value);
   if (!parsed.success) throw new Error("Incomplete or invalid order details.");
+  if (!parsed.data.phone && parsed.data.salesChannel !== "offline") throw new Error("Complete your WhatsApp number.");
 
   const calculatedSubtotal = parsed.data.items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
   if (Math.abs(calculatedSubtotal - parsed.data.subtotal) > 0.01) throw new Error("The order subtotal does not match its items.");
 
   for (const item of parsed.data.items) {
+    for (const asset of item.assets) {
+      if (asset.mimeType === "application/postscript" && (asset.kind !== "original" || ![4,5].includes(asset.slot ?? 0) || !asset.fileName.endsWith(".eps"))) throw new Error("Text EPS must use its dedicated text slot.");
+      if (asset.kind === "original" && asset.mimeType !== "application/postscript" && (asset.slot ?? 0) > 3) throw new Error("Invalid photo slot.");
+    }
+    for (const side of [0,1]) {
+      const edited = item.assets.some((asset) => asset.kind === "edited" && (asset.slot ?? 0) === side);
+      const preview = item.assets.some((asset) => asset.kind === "preview" && (asset.slot ?? 0) === side);
+      if (edited !== preview) throw new Error("The cropped image and product preview are required for each saved side.");
+    }
     const kinds = new Set(item.assets.map((asset) => asset.kind));
-    if (new Set(item.assets.map((asset) => `${asset.kind}:${asset.slot ?? 0}`)).size !== item.assets.length || item.assets.some((asset) => asset.kind !== "original" && (asset.slot ?? 0) !== 0)) throw new Error(`Duplicate files were supplied for ${item.productName}.`);
+    if (new Set(item.assets.map((asset) => `${asset.kind}:${asset.slot ?? 0}`)).size !== item.assets.length || item.assets.some((asset) => asset.kind !== "original" && (asset.slot ?? 0) > 1)) throw new Error(`Duplicate files were supplied for ${item.productName}.`);
     if (!item.designId && item.assets.length) throw new Error(`Unexpected customization files were supplied for ${item.productName}.`);
     if (item.designId && (!kinds.has("edited") || !kinds.has("preview"))) {
       throw new Error(`The cropped image and product preview are required for ${item.productName}.`);

@@ -50,6 +50,6 @@ export async function GET(request: Request) {
     const result = await session.client.storage.from("order-assets").download(storagePath);
     if (result.error || !result.data) throw result.error ?? new Error("The file could not be downloaded.");
     const fileName = String(record.original_filename ?? storagePath.split("/").pop()).replace(/[^a-zA-Z0-9._-]/g, "_");
-    return new Response(result.data, { headers: { "Content-Type": record.mime_type, "Content-Disposition": `inline; filename="${fileName}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+    return new Response(result.data, { headers: { "Content-Type": record.mime_type, "Content-Disposition": `${record.mime_type === "application/postscript" ? "attachment" : "inline"}; filename="${fileName}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   } catch { return Response.json({ error: "The private order file could not be downloaded." }, { status: 500 }); }
 }

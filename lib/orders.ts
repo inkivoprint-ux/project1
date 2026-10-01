@@ -7,7 +7,7 @@ import { assertOrderCanBePurged, transitionOrder, type OrderManagementAction } f
 import { assertProductSize, T_SHIRT_SIZES, type TShirtSize } from "./productSizes";
 
 export type AssetKind = "original" | "edited" | "preview";
-export type ImageMimeType = "image/jpeg" | "image/png" | "image/webp";
+export type ImageMimeType = "image/jpeg" | "image/png" | "image/webp" | "application/postscript";
 export type DraftAsset = { kind: AssetKind; slot?: number; fileName: string; mimeType: ImageMimeType; blob: Blob };
 export type DesignDraft = { id: string; productId: string; configuration: Record<string, unknown>; assets: DraftAsset[]; createdAt: string };
 export type OrderAsset = { kind: AssetKind; slot?: number; fileName: string; mimeType: string; storagePath?: string; uploadItemIndex?: number; designId?: string };
@@ -36,7 +36,7 @@ const savedOrderSchema = z.object({
     productId: z.string().min(1), productName: z.string(), quantity: z.number().int().min(1).max(99), unitPrice: z.number().finite().nonnegative(),
     designId: z.string().optional(), configuration: z.record(z.unknown()).optional(),
     size: z.enum(T_SHIRT_SIZES).optional(),
-    assets: z.array(z.object({ kind: z.enum(["original", "edited", "preview"]), slot: z.number().int().min(0).max(1).optional(), fileName: z.string().min(1), mimeType: z.string(), storagePath: z.string().optional(), designId: z.string().optional() })),
+    assets: z.array(z.object({ kind: z.enum(["original", "edited", "preview"]), slot: z.number().int().min(0).max(5).optional(), fileName: z.string().min(1), mimeType: z.string(), storagePath: z.string().optional(), designId: z.string().optional() })),
   })),
 });
 
@@ -49,6 +49,7 @@ const extensionByMimeType: Record<ImageMimeType, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
+  "application/postscript": "eps",
 };
 
 export function buildDesignAssetFileName(designId: string, kind: AssetKind, mimeType: ImageMimeType) {
@@ -101,10 +102,10 @@ export function loadOrders(): OrderRecord[] {
   }
 }
 
-export async function loadAdminOrders(includeDeleted = false) {
-  const localOrders = loadOrders().filter((order) => includeDeleted || !order.deletedAt);
+export async function loadAdminOrders(includeDeleted = false, channel?: "online" | "offline") {
+  const localOrders = loadOrders().filter((order) => (includeDeleted || !order.deletedAt) && (!channel || (order.salesChannel ?? "online") === channel));
   if (!hasSupabaseConfiguration()) return process.env.NODE_ENV === "development" ? localOrders : [];
-  const response = await fetch(`/api/orders${includeDeleted ? "?includeDeleted=true" : ""}`, { cache: "no-store" });
+  const response = await fetch(`/api/orders?includeDeleted=${includeDeleted}${channel ? `&channel=${channel}` : ""}`, { cache: "no-store" });
   const result = await response.json() as { orders?: OrderRecord[]; error?: string };
   if (!response.ok || !Array.isArray(result.orders)) throw new Error(result.error || "Orders could not be loaded.");
   return [...result.orders, ...localOrders.filter((order) => order.storageMode === "local")];
@@ -166,8 +167,8 @@ export function subscribeToOrders(callback: () => void) {
   return () => { window.removeEventListener(ORDERS_EVENT, callback); window.removeEventListener("storage", onStorage); };
 }
 
-export async function submitCartOrder(args: { cart: CartEntry[]; products: Product[]; customerName: string; phone: string; address: string }) {
-  if (!args.customerName.trim() || !args.phone.trim() || !args.address.trim()) throw new Error("Complete your name, WhatsApp number, and delivery address.");
+export async function submitCartOrder(args: { cart: CartEntry[]; products: Product[]; customerName: string; phone: string; address: string; salesChannel?: "online" | "offline" }) {
+  if (!args.customerName.trim() || (!args.phone.trim() && args.salesChannel !== "offline") || !args.address.trim()) throw new Error("Complete your name, WhatsApp number, and delivery address.");
   if (!args.cart.length) throw new Error("Your cart is empty.");
   const items: OrderItemRecord[] = [];
   const formData = new FormData();
@@ -195,7 +196,7 @@ export async function submitCartOrder(args: { cart: CartEntry[]; products: Produ
     items.push({ productId: product.id, productName: product.name, quantity: entry.quantity, unitPrice: product.price, ...(entry.size ? { size: entry.size } : {}), designId: draft?.id, configuration: draft?.configuration, assets });
   }
   const subtotal = items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
-  const basePayload = { customerName: args.customerName.trim(), phone: args.phone.trim(), address: args.address.trim(), subtotal, items };
+  const basePayload = { customerName: args.customerName.trim(), phone: args.phone.trim(), address: args.address.trim(), subtotal, items, ...(args.salesChannel ? { salesChannel: args.salesChannel } : {}) };
   const fingerprint = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(basePayload))))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
   const pendingKey = `inkivo:pending-order:${fingerprint}`;
   const idempotencyKey = window.sessionStorage.getItem(pendingKey) || crypto.randomUUID();
@@ -288,7 +289,7 @@ export async function deleteOrderAsset(args: { orderId: string; itemIndex: numbe
 async function prepareCheckoutAsset(asset: DraftAsset): Promise<DraftAsset> {
   // Keep the print-ready transparent PNG untouched. Optimise only the photo
   // reference and product preview; the browser draft retains every original.
-  if (asset.kind === "edited" || asset.blob.size < 250_000) return asset;
+  if (asset.mimeType === "application/postscript" || asset.kind === "edited" || asset.blob.size < 250_000) return asset;
   const url = URL.createObjectURL(asset.blob);
   try {
     const image = new Image();

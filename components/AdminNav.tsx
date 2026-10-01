@@ -12,6 +12,7 @@ const items = [
   { label: "Dashboard", href: "/admin", icon: CircleGauge },
   { label: "Products", href: "/admin#products", icon: PackageOpen },
   { label: "Templates", href: "/admin#templates", icon: Layers3 },
+  { label: "Offline orders", href: "/admin#offline-orders", icon: ShoppingBag },
   { label: "Orders", href: "/admin#orders", icon: ShoppingBag },
   { label: "Stock", href: "/admin#inventory", icon: PackageOpen },
   { label: "Counter", href: "/admin/counter", icon: ShoppingBag },

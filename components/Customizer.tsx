@@ -25,6 +25,7 @@ import { QuantitySelector } from "./QuantitySelector";
 import { SizeQuantitySelector } from "./SizeQuantitySelector";
 import { MockupStage } from "./MockupStage";
 import { loadCanvasImage, exportCanvasBlob } from "@/lib/canvasImages";
+import { textContoursEps } from "@/lib/textEps";
 
 type PhotoLayer = { url: string | null; file: File | null; meta: { width: number; height: number } | null; scale: number; rotation: number; x: number; y: number };
 const emptyPhoto = (): PhotoLayer => ({ url: null, file: null, meta: null, scale: 1, rotation: 0, x: 0, y: 0 });
@@ -80,7 +81,7 @@ function getMalayalamFont(font: TextFont) {
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-export function Customizer({ product }: { product: Product }) {
+export function Customizer({ product, onPrepared, onCancel, counterSelection }: { product: Product; onPrepared?: (entries: CartEntry[]) => void; onCancel?: () => void; counterSelection?: { quantity: number; size: string } }) {
   const [photos, setPhotos] = useState<PhotoLayer[]>(() => [emptyPhoto(), emptyPhoto()]);
   const [selectedPhoto, setSelectedPhoto] = useState(0);
   const photoUrlsRef = useRef<string[]>([]);
@@ -118,6 +119,8 @@ export function Customizer({ product }: { product: Product }) {
   const purchaseBusyRef = useRef(false);
   const preparedDesignRef = useRef<{ signature: string; id: string } | null>(null);
   const [view, setView] = useState<"front" | "back">("front");
+  const sideStates = useRef<Partial<Record<"front" | "back", { photos: PhotoLayer[]; text: string; textSize: number; textColor: string; textRotation: number; textX: number; textY: number; font: TextFont; textOpacity: number; textSurface: TextSurface; textDeformation: typeof DEFAULT_TEXT_DEFORMATION; textBold: boolean | null; textItalic: boolean | null }>>>({});
+  const sideDrafts = useRef<Partial<Record<"front" | "back", { assets: DraftAsset[]; configuration: Record<string, unknown> }>>>({});
   const [message, setMessage] = useState("");
   const [template, setTemplate] = useState(() => createDefaultTemplate(product));
   const [templateReady, setTemplateReady] = useState(!hasSupabaseConfiguration());
@@ -144,20 +147,20 @@ export function Customizer({ product }: { product: Product }) {
   const textArtwork = useMemo(() => typeof document === "undefined" || !text.trim() || waitingForTextFont ? null : createTextArtwork(text, textColor, font, textSize, textStyle.weight, textStyle.italic), [text, textColor, font, textSize, textStyle.weight, textStyle.italic, waitingForTextFont]);
   const waitingForTextRender = Boolean(template.tools.text && textArtwork && textRenderState !== "ready");
   const waitingForImageRender = Boolean(template.tools.images && photos.slice(0, photoCount).some((entry, index) => entry.url && photoRenderStates[index] !== "ready"));
-  const allowsBackView = Boolean(product.views?.some((item) => item.id === "back"));
+  const allowsBackView = isTShirt || Boolean(product.views?.some((item) => item.id === "back"));
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
-      setQuantity(normalizePurchaseQuantity(params.get("quantity")));
-      if (isTShirt) setSizeQuantities(parseSizeQuantities(params.get("sizes")));
-      setRequirePersonalisation(params.get("personalise") === "1");
+      setQuantity(normalizePurchaseQuantity(counterSelection?.quantity ?? params.get("quantity")));
+      if (isTShirt) setSizeQuantities(parseSizeQuantities(counterSelection?.size ? `${counterSelection.size}:${counterSelection.quantity}` : params.get("sizes")));
+      setRequirePersonalisation(Boolean(counterSelection) || params.get("personalise") === "1");
       setPurchaseIntent(params.get("intent") === "buy-now" ? "buy-now" : "cart");
       setView(params.get("view") === "back" && allowsBackView ? "back" : "front");
       setPurchaseContextReady(true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [allowsBackView, isTShirt]);
+  }, [allowsBackView, isTShirt, counterSelection]);
 
   useEffect(() => {
     if (!selectedMalayalamFont) return;
@@ -177,10 +180,11 @@ export function Customizer({ product }: { product: Product }) {
     const unsubscribe = subscribeToTemplates(refresh);
     return () => { window.clearTimeout(timer); unsubscribe(); };
   }, [product]);
-  useEffect(() => { photoUrlsRef.current = photos.flatMap((entry) => entry.url ? [entry.url] : []); }, [photos]);
+  useEffect(() => { photoUrlsRef.current = Array.from(new Set([...photoUrlsRef.current, ...photos.flatMap((entry) => entry.url ? [entry.url] : [])])); }, [photos]);
   useEffect(() => () => { photoUrlsRef.current.forEach((url) => URL.revokeObjectURL(url)); }, []);
   const area = view === "back" ? template.backArea ?? template.area : template.area;
-  const productView = product.views?.find((item) => item.id === view) ?? { id: "front", label: "Front", image: product.image };
+  const productViews = [...(product.views ?? [{ id: "front" as const, label: "Front", image: product.image }]), ...(isTShirt && !product.views?.some((entry) => entry.id === "back") ? [{ id: "back" as const, label: "Back (reference preview)", image: "/products/tshirt-back.png" }] : [])];
+  const productView = productViews.find((item) => item.id === view)!;
   const mockupSrc = template.mockupImages?.[view] ?? productView.image;
   const surfaceMap = area.surfaceMap;
   const hasDesign = Boolean(hasPhotos || (template.tools.text && textArtwork));
@@ -278,13 +282,41 @@ export function Customizer({ product }: { product: Product }) {
     setMessage("Design reset");
   }
 
-  function changeView(nextView: "front" | "back") {
+  async function changeView(nextView: "front" | "back") {
+    if (nextView === view || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender || loadedMockup !== mockupSrc) return;
+    setSavingToCart(true);
+    try {
+    sideStates.current[view] = { photos, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textBold, textItalic };
+    if (hasDesign) sideDrafts.current[view] = await captureSide(`${product.slug}-${view}-${crypto.randomUUID().slice(0,8)}`);
+    else delete sideDrafts.current[view];
     const nextArea = nextView === "back" ? template.backArea ?? template.area : template.area;
     setView(nextView);
-    setPhotos((current) => current.map((entry) => ({ ...entry, scale: nextArea.defaultArtworkScale ?? 1, rotation: nextArea.defaultArtworkRotation ?? 0, x: nextArea.defaultArtworkOffsetX ?? 0, y: nextArea.defaultArtworkOffsetY ?? 0 })));
-    setTextRotation(nextArea.defaultArtworkRotation ?? 0);
-    setTextX(nextArea.defaultArtworkOffsetX ?? 0);
-    setTextY(nextArea.defaultArtworkOffsetY ?? 0);
+    const saved = sideStates.current[nextView];
+    setPhotos(saved?.photos ?? [emptyPhoto(), emptyPhoto()]); setText(saved?.text ?? ""); setTextSize(saved?.textSize ?? 28); setTextColor(saved?.textColor ?? "#ffffff"); setFont(saved?.font ?? "classic"); setTextOpacity(saved?.textOpacity ?? 100); setTextSurface(saved?.textSurface ?? "product"); setTextDeformation(saved?.textDeformation ?? { ...DEFAULT_TEXT_DEFORMATION }); setTextBold(saved?.textBold ?? null); setTextItalic(saved?.textItalic ?? null);
+    setTextRotation(saved?.textRotation ?? nextArea.defaultArtworkRotation ?? 0);
+    setTextX(saved?.textX ?? nextArea.defaultArtworkOffsetX ?? 0); setTextY(saved?.textY ?? nextArea.defaultArtworkOffsetY ?? 0);
+    preparedDesignRef.current = null;
+    } catch (failure) { setMessage(failure instanceof Error ? failure.message : "Side could not be saved."); }
+    finally { setSavingToCart(false); }
+  }
+
+  async function captureSide(id: string) {
+    if (!stageRef.current || !artworkRef.current) throw new Error("Wait for the preview before saving.");
+    const assets: DraftAsset[] = [];
+    if (template.tools.images) photos.slice(0, photoCount).forEach((entry, slot) => { if (entry.url && entry.file) assets.push({ kind: "original", slot: slot + (view === "back" ? 2 : 0), fileName: buildDesignAssetFileName(`${id}${slot ? "-photo-2" : ""}`, "original", entry.file.type as DraftAsset["mimeType"]), mimeType: entry.file.type as DraftAsset["mimeType"], blob: entry.file }); });
+    const artworkBlob = await exportArtworkBlob(artworkRef.current);
+    const previewBlob = await exportProductPreview(stageRef.current, artworkRef.current, mockupSrc, area.rotation);
+    if (!artworkBlob || !previewBlob) throw new Error("The design files could not be generated.");
+    assets.push({ kind: "edited", slot: view === "back" ? 1 : 0, fileName: `${id}-cropped.png`, mimeType: "image/png", blob: artworkBlob });
+    assets.push({ kind: "preview", slot: view === "back" ? 1 : 0, fileName: `${id}-preview.png`, mimeType: "image/png", blob: previewBlob });
+    if (template.tools.text && text.trim()) {
+      const canvas = artworkRef.current.querySelector<HTMLCanvasElement>(".text-layer canvas");
+      const context = canvas?.getContext("2d");
+      if (!canvas || !context) throw new Error("Text outline is not ready.");
+      const eps = textContoursEps(context.getImageData(0,0,canvas.width,canvas.height).data, canvas.width, canvas.height, textColor, area.widthMm, area.heightMm);
+      assets.push({ kind: "original", slot: view === "back" ? 5 : 4, fileName: `${id}-text.eps`, mimeType: "application/postscript", blob: new Blob([eps], { type: "application/postscript" }) });
+    }
+    return { assets, configuration: { view, imageLayers: photos.slice(0, photoCount).map(({ scale, rotation, x, y, file }) => ({ scale, rotation, x, y, fileName: file?.name })), text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textBold: textStyle.weight >= 600, textItalic: textStyle.italic, templateId: template.id, templateVersion: template.version, templateSnapshot: { ...template, area, backArea: undefined, mockupImages: undefined } } };
   }
 
   async function purchase(action: "cart" | "buy-now") {
@@ -292,7 +324,7 @@ export function Customizer({ product }: { product: Product }) {
     try { createProductPurchaseEntries(product, quantity, sizeQuantities); }
     catch (failure) { setMessage(failure instanceof Error ? failure.message : "Choose your size and quantity."); return; }
     const requestedDesign = Boolean(hasPhotos || (template.tools.text && text.trim()));
-    if ((requirePersonalisation || requestedDesign) && !hasDesign) {
+    if ((requirePersonalisation || requestedDesign) && !hasDesign && !Object.keys(sideDrafts.current).length) {
       setMessage("Add a photo or text and wait for the preview before ordering with personalisation.");
       return;
     }
@@ -302,30 +334,17 @@ export function Customizer({ product }: { product: Product }) {
       let designId: string | undefined;
       if (hasDesign && preparedDesignRef.current?.signature === designSignature) {
         designId = preparedDesignRef.current.id;
-      } else if (hasDesign) {
+      } else if (hasDesign || Object.keys(sideDrafts.current).some((side) => side !== view)) {
         if (!stageRef.current || !artworkRef.current) throw new Error("The design preview is not ready. Please try again.");
-        designId = `${product.slug}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
-        const assets: DraftAsset[] = [];
-        if (template.tools.images) photos.slice(0, photoCount).forEach((entry, slot) => {
-          if (!entry.url || !entry.file) return;
-          const mimeType = entry.file.type as DraftAsset["mimeType"];
-          assets.push({ kind: "original", slot, fileName: buildDesignAssetFileName(`${designId}${slot ? "-photo-2" : ""}`, "original", mimeType), mimeType, blob: entry.file });
-        });
-        const artworkBlob = await exportArtworkBlob(artworkRef.current);
-        const previewBlob = await exportProductPreview(stageRef.current, artworkRef.current, mockupSrc, area.rotation);
-        if (!artworkBlob || !previewBlob) throw new Error("The design files could not be generated.");
-        assets.push({ kind: "edited", fileName: buildDesignAssetFileName(designId, "edited", "image/png"), mimeType: "image/png", blob: artworkBlob });
-        assets.push({ kind: "preview", fileName: buildDesignAssetFileName(designId, "preview", "image/png"), mimeType: "image/png", blob: previewBlob });
-        await saveDesignDraft({
-          id: designId,
-          productId: product.id,
-          createdAt: new Date().toISOString(),
-          assets,
-          configuration: { view, imageLayers: photos.slice(0, photoCount).map(({ scale, rotation, x, y, file }) => ({ scale, rotation, x, y, fileName: file?.name })), imageScale, imageRotation, imageX, imageY, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textBold: textStyle.weight >= 600, textItalic: textStyle.italic, textFontWeight: textStyle.weight, templateId: template.id, templateVersion: template.version, templateSnapshot: { ...template, area, backArea: undefined, mockupImages: undefined } },
-        });
+        designId = `${product.slug}-${crypto.randomUUID()}`;
+        if (hasDesign) sideDrafts.current[view] = await captureSide(`${designId}-${view}`); else delete sideDrafts.current[view];
+        const sides = Object.values(sideDrafts.current);
+        const active = sideDrafts.current[view] ?? sides[0];
+        await saveDesignDraft({ id: designId, productId: product.id, createdAt: new Date().toISOString(), assets: sides.flatMap((side) => side.assets), configuration: { ...active.configuration, sides: Object.fromEntries(Object.entries(sideDrafts.current).map(([side, draft]) => [side, draft!.configuration])) } });
         preparedDesignRef.current = { signature: designSignature, id: designId };
       }
       const entries = createProductPurchaseEntries(product, quantity, sizeQuantities, designId);
+      if (onPrepared) { onPrepared(entries); return; }
       if (action === "buy-now") {
         setBuyNow(entries);
         setMessage("Your selection is ready for checkout. Your shopping cart is unchanged.");
@@ -372,7 +391,7 @@ export function Customizer({ product }: { product: Product }) {
   return (
     <main className="customizer-shell">
       <header className="customizer-header">
-        <Link href={`/products/${product.slug}`} className="customizer-back"><ArrowLeft size={18} /> Product details</Link>
+        {onCancel ? <button className="customizer-back" onClick={onCancel}><ArrowLeft size={18} /> Return to counter</button> : <Link href={`/products/${product.slug}`} className="customizer-back"><ArrowLeft size={18} /> Product details</Link>}
         <BrandLogo />
         <div className="customizer-safe"><Check size={14} /> Changes appear instantly</div>
       </header>
@@ -406,8 +425,8 @@ export function Customizer({ product }: { product: Product }) {
         <aside className="customizer-panel">
           <fieldset className="customizer-purchase-fields" disabled={savingToCart}>
           <div className="customizer-product-info"><p>{product.category}</p><h1>{product.name}</h1><span>{product.finish}{product.stockQuantity == null ? "" : ` · ${product.stockQuantity} in stock`}</span><div><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}</div></div>
-          {product.views && <div className="view-switch customer-view-switch" aria-label="Product side">{product.views.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => changeView(item.id)}>{item.label}</button>)}</div>}
-          {product.views && <p className="side-save-note">Order files capture the selected {productView.label.toLowerCase()} side. A combined front-and-back print file is not generated.</p>}
+          {productViews.length > 1 && <div className="view-switch customer-view-switch" aria-label="Product side">{productViews.map((item) => <button key={item.id} disabled={savingToCart} className={view === item.id ? "active" : ""} onClick={() => changeView(item.id)}>{item.label}</button>)}</div>}
+          {productViews.length > 1 && <p className="side-save-note">Front and back keep separate designs. Both saved sides are included in one order. Text artwork is supplied as outlined EPS; previews are for placement reference.</p>}
           <div className="tool-tabs">
             {template.tools.images && <button className={effectiveActiveLayer === "image" ? "active" : ""} onClick={() => setActiveLayer("image")}><Upload size={17} /> Photo</button>}
             {template.tools.text && <button className={effectiveActiveLayer === "text" ? "active" : ""} onClick={() => setActiveLayer("text")}><Type size={17} /> Text</button>}
@@ -460,8 +479,8 @@ export function Customizer({ product }: { product: Product }) {
           <div className="print-quality"><Check /><div><strong>{area.surface === "fabric" ? "Wrinkle-mapped fabric preview" : area.precisionWrap ? "Precision cylindrical preview" : "Mapped product preview"}</strong><small>{area.widthMm} × {area.heightMm} mm · target {area.targetDpi} DPI · {productView.label} · preview only</small></div></div>
           {isTShirt ? <SizeQuantitySelector stock={product.sizeStock} quantities={sizeQuantities} onChange={setSizeQuantities} disabled={savingToCart} /> : <QuantitySelector quantity={quantity} onChange={setQuantity} disabled={savingToCart} />}
           <p className="purchase-note">{requirePersonalisation && !hasDesign ? "Add a photo or text to order with personalisation." : hasDesign ? "Your design will be applied to each item in this quantity." : "No artwork added: this item will be ordered without personalisation."}{purchaseIntent === "buy-now" && " When your design is ready, choose Buy now below."}</p>
-          <div className="customizer-actions"><button className="reset-button" onClick={reset}><RotateCcw size={16} /> Reset</button>{added ? <Link className="add-cart-button added" href="/?cart=open"><ShoppingBag /> View your cart</Link> : <button className="add-cart-button" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("cart")}><ShoppingBag /> {savingToCart || (waitingForTextRender && textRenderState === "rendering") || (waitingForImageRender && imageRenderState === "rendering") ? "Preparing files…" : `Add to cart · ${formatPrice(product.price * selectedQuantity)}`}</button>}</div>
-          <button className="button customizer-buy-now" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("buy-now")}>{savingToCart ? "Preparing files…" : `Buy now · ${formatPrice(product.price * selectedQuantity)}`}</button>
+          <div className="customizer-actions"><button className="reset-button" onClick={reset}><RotateCcw size={16} /> Reset</button>{added ? <Link className="add-cart-button added" href="/?cart=open"><ShoppingBag /> View your cart</Link> : <button className="add-cart-button" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("cart")}><ShoppingBag /> {savingToCart || (waitingForTextRender && textRenderState === "rendering") || (waitingForImageRender && imageRenderState === "rendering") ? "Preparing files…" : `${onPrepared ? "Save counter design" : "Add to cart"} · ${formatPrice(product.price * selectedQuantity)}`}</button>}</div>
+          {!onPrepared && <button className="button customizer-buy-now" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("buy-now")}>{savingToCart ? "Preparing files…" : `Buy now · ${formatPrice(product.price * selectedQuantity)}`}</button>}
           {message && <p className="editor-message" role="status">{message}</p>}
           </fieldset>
         </aside>
