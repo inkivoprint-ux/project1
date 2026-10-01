@@ -409,3 +409,12 @@ button { color: inherit; }
 .preview-toolbar { flex-wrap: wrap; height: auto; min-height: 48px; gap: 8px; padding-block: 8px; }
 .preview-toolbar .preview-zoom-controls button { min-width: 36px; min-height: 36px; font-size: 11px; color: var(--green); }
 .preview-toolbar .preview-zoom-controls button:disabled { opacity: .35; cursor: default; }
+
+.preview-toolbar .preview-pan-controls { flex-wrap: wrap; }
+.preview-toolbar .preview-pan-controls button { min-width: 36px; min-height: 36px; color: var(--green); font-size: 11px; }
+.preview-toolbar .preview-pan-controls button.active { color: white; }
+.template-stage.pan-preview { touch-action: pan-x pan-y; }
+.template-stage.pan-preview .editable-print-area { pointer-events: none; }
+
+.template-stage.pan-preview { cursor: grab; }
+.template-stage.pan-preview:active { cursor: grabbing; }

@@ -6,7 +6,7 @@ import { maskPointerPosition } from "@/lib/maskEditing";
 import { previewBlendMode } from "@/lib/artworkBlend";
 import Link from "next/link";
 import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, Eye, EyeOff, ImagePlus, Monitor, Move, RotateCcw, Save, SlidersHorizontal, Smartphone, Sparkles, TestTube2, Triangle, Undo2, Upload, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Check, ChevronDown, Eye, EyeOff, ImagePlus, Monitor, Move, RotateCcw, Save, SlidersHorizontal, Smartphone, Sparkles, TestTube2, Triangle, Undo2, Upload, ZoomIn, ZoomOut } from "lucide-react";
 import { getMaskPolygon, MASK_PRESETS } from "@/lib/maskShapes";
 import { Product } from "@/lib/products";
 import { createDefaultTemplate, loadTemplate, maskClipPath, resetTemplate, type MaskShape, SurfaceType, TemplateArea, TemplateConfig } from "@/lib/customization";
@@ -31,6 +31,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
   const [template, setTemplate] = useState(() => createDefaultTemplate(product));
   const [artwork, setArtwork] = useState<string>("/brand/inkivo-symbol.png");
   const [tab, setTab] = useState<"placement" | "surface" | "effects" | "tools">("placement");
+  const [panPreview, setPanPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [showPrintGuides, setShowPrintGuides] = useState(true);
   const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
@@ -40,6 +41,14 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
   const [saving, setSaving] = useState(false);
   const [ready, setReady] = useState(!hasSupabaseConfiguration());
   const stageRef = useRef<HTMLDivElement>(null);
+  const movePreview = (x: number, y: number) => {
+    const frame = stageRef.current?.closest(".template-stage");
+    if (frame) frame.scrollBy({ left: x * 100, top: y * 100, behavior: "auto" });
+  };
+  const centerPreview = () => {
+    const frame = stageRef.current?.closest(".template-stage");
+    if (frame) frame.scrollTo({ left: (frame.scrollWidth - frame.clientWidth) / 2, top: (frame.scrollHeight - frame.clientHeight) / 2, behavior: "auto" });
+  };
   const dragRef = useRef<DragState>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const mockupRef = useRef<HTMLInputElement>(null);
@@ -280,9 +289,9 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
           </aside>
 
           <section className="template-preview-panel">
-            <div className="preview-toolbar"><div><button className={viewport === "desktop" ? "active" : ""} onClick={() => setViewport("desktop")}><Monitor /> Desktop</button><button className={viewport === "mobile" ? "active" : ""} onClick={() => setViewport("mobile")}><Smartphone /> Mobile</button></div><div className="preview-zoom-controls" role="group" aria-label="Product preview zoom"><button type="button" aria-label="Zoom out product" disabled={previewZoom <= 0.5} onClick={() => setPreviewZoom((zoom) => Math.max(0.5, zoom - 0.25))}><ZoomOut /></button><button type="button" aria-label="Reset product zoom" onClick={() => setPreviewZoom(1)}>{Math.round(previewZoom * 100)}%</button><button type="button" aria-label="Zoom in product" disabled={previewZoom >= 3} onClick={() => setPreviewZoom((zoom) => Math.min(3, zoom + 0.25))}><ZoomIn /></button></div><button type="button" className="print-guides-toggle" aria-pressed={showPrintGuides} aria-label="Show print guides" onClick={() => { endDrag(); setShowPrintGuides((visible) => !visible); }}>{showPrintGuides ? <EyeOff size={14} /> : <Eye size={14} />}{showPrintGuides ? "Hide print guides" : "Show print guides"}</button></div>
+            <div className="preview-toolbar"><div><button className={viewport === "desktop" ? "active" : ""} onClick={() => setViewport("desktop")}><Monitor /> Desktop</button><button className={viewport === "mobile" ? "active" : ""} onClick={() => setViewport("mobile")}><Smartphone /> Mobile</button></div><div className="preview-zoom-controls" role="group" aria-label="Product preview zoom"><button type="button" aria-label="Zoom out product" disabled={previewZoom <= 0.5} onClick={() => setPreviewZoom((zoom) => Math.max(0.5, zoom - 0.25))}><ZoomOut /></button><button type="button" aria-label="Reset product zoom" onClick={() => { setPreviewZoom(1); setPanPreview(false); stageRef.current?.closest(".template-stage")?.scrollTo(0, 0); }}>{Math.round(previewZoom * 100)}%</button><button type="button" aria-label="Zoom in product" disabled={previewZoom >= 3} onClick={() => setPreviewZoom((zoom) => Math.min(3, zoom + 0.25))}><ZoomIn /></button></div>{previewZoom > 1 && <div className="preview-pan-controls" role="group" aria-label="Move zoomed product preview"><button type="button" aria-label="Move view left" onClick={() => movePreview(-1, 0)}><ArrowLeft /></button><button type="button" aria-label="Move view up" onClick={() => movePreview(0, -1)}><ArrowUp /></button><button type="button" aria-label="Move view down" onClick={() => movePreview(0, 1)}><ArrowDown /></button><button type="button" aria-label="Move view right" onClick={() => movePreview(1, 0)}><ArrowRight /></button><button type="button" onClick={centerPreview}>Centre</button><button type="button" className={panPreview ? "active" : ""} aria-pressed={panPreview} onClick={() => { endDrag(); setPanPreview((active) => !active); }}><Move />{panPreview ? "Edit artwork" : "Move preview"}</button></div>}<button type="button" className="print-guides-toggle" aria-pressed={showPrintGuides} aria-label="Show print guides" onClick={() => { endDrag(); setShowPrintGuides((visible) => !visible); }}>{showPrintGuides ? <EyeOff size={14} /> : <Eye size={14} />}{showPrintGuides ? "Hide print guides" : "Show print guides"}</button></div>
             <div className={`template-stage-frame ${viewport}`}>
-              <MockupStage key={mockupSrc} src={mockupSrc} alt={`${product.name} ${productView.label}`} zoom={previewZoom} className={`template-stage${previewZoom > 1 ? " is-zoomed" : ""}`} imageClassName="template-product-image" stageRef={stageRef}>
+              <MockupStage key={mockupSrc} src={mockupSrc} alt={`${product.name} ${productView.label}`} zoom={previewZoom} enablePan={panPreview && previewZoom > 1} className={`template-stage${previewZoom > 1 ? ` is-zoomed${panPreview ? " pan-preview" : ""}` : ""}`} imageClassName="template-product-image" stageRef={stageRef}>
                 <div className={`editable-print-area editing-${editTarget}${showPrintGuides ? "" : " guides-hidden"}`} style={areaStyle} onPointerDown={(e) => editTarget === "mask" ? addMaskPoint(e) : beginDrag(e, "move")} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
                   <WarpedArtwork src={artwork} curvature={area.curvature} perspective={area.perspective} taper={area.taper} opacity={area.opacity} blendMode={area.blendMode} overlayStrength={area.overlayStrength} mockupSrc={mockupSrc} backdropArea={area} brightness={area.brightness} contrast={area.contrast} saturation={area.saturation} maskRadius={area.maskRadius} maskShape={area.maskShape} maskPoints={area.maskPoints} surface={area.surface} precisionWrap={area.precisionWrap} wrapAngle={area.wrapAngle} edgeFade={area.edgeFade} surfaceMap={area.surfaceMap} displacementStrength={area.displacementStrength} fabricBlendStrength={area.fabricBlendStrength} fabricTextureStrength={area.fabricTextureStrength} scale={area.defaultArtworkScale ?? 1} imageRotation={area.defaultArtworkRotation ?? 0} offsetX={area.defaultArtworkOffsetX ?? 0} offsetY={area.defaultArtworkOffsetY ?? 0} />
                   {showPrintGuides && editTarget === "mask" && <><div className="mask-outline" style={{ clipPath: maskClipPath(area.maskShape, area.maskPoints) }} />{area.maskShape === "custom" && (area.maskPoints ?? []).map((point, index) => <button key={index} type="button" aria-label={`Move shape point ${index + 1}`} className="mask-point" onPointerDown={(event) => beginPointDrag(event, index)} style={{ left: `${point.x}%`, top: `${point.y}%` }}><b>{index + 1}</b></button>)}</>}
