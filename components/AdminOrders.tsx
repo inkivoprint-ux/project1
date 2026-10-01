@@ -5,6 +5,7 @@ import { CheckCircle2, CircleAlert, Download, FileImage, LoaderCircle, PackageCh
 import { useEffect, useState } from "react";
 import { formatPrice } from "@/lib/products";
 import { deleteOrderAsset, loadAdminOrders, loadDesignDraft, loadOrders, manageOrder, permanentlyDeleteOrder, subscribeToOrders, type OrderAsset, type OrderRecord } from "@/lib/orders";
+import { buildOrderZip } from "@/lib/orderZip";
 import type { OrderManagementAction } from "@/lib/orderManagement";
 import { useDialog } from "@/lib/useDialog";
 
@@ -34,6 +35,7 @@ export function AdminOrders({ onCount }: { onCount?: (count: number) => void }) 
     {!visibleOrders.length && <div className="admin-card admin-empty"><ShoppingBag /><h2>{showTrash ? "Trash is empty" : "No active orders"}</h2><p>{showTrash ? "Deleted completed orders will appear here." : "Saved checkout orders will appear here. Deleted orders can be restored from Trash."}</p></div>}
     {visibleOrders.map((order) => <article className="admin-order-card" key={order.id}>
       <div className="admin-order-head"><div><span>{order.orderNumber}</span><strong>{order.customerName}</strong><small>{order.phone} · {order.address}</small></div><div><span className={`order-storage ${order.storageMode}`}><PackageCheck /> {order.storageMode === "supabase" ? "Saved to Supabase" : "Local workspace"}</span><small>{new Date(order.createdAt).toLocaleString("en-IN")}</small></div></div>
+      <OrderZipDownload order={order} />
       <OrderManagementControls order={order} onChanged={refresh} />
       {order.items.map((item, index) => <div className="admin-order-item" key={`${item.productId}-${index}`}>
         <div className="admin-order-product"><strong>{item.quantity} × {item.productName}{item.size ? ` · Size ${item.size}` : ""}</strong><span>{formatPrice(item.unitPrice * item.quantity)}</span></div>
@@ -108,5 +110,42 @@ function OrderAssetTile({ order, itemIndex, asset, onDeleted }: { order: OrderRe
     <small title={asset.fileName}>{asset.fileName}</small>
     <div className="order-asset-actions">{url && <a href={url} download={asset.fileName}><Download /> Download</a>}<button type="button" onClick={remove} disabled={deleting || Boolean(order.deletedAt)} title={order.deletedAt ? "Restore the order before deleting an individual file" : undefined}>{deleting ? <LoaderCircle className="spin" /> : <Trash2 />} Delete file</button></div>
     {error && <p className="order-asset-error" title={error} role="alert"><CircleAlert /> {error}</p>}
+  </div>;
+}
+
+function OrderZipDownload({ order }: { order: OrderRecord }) {
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [error, setError] = useState("");
+  const download = async () => {
+    if (busy) return;
+    setBusy(true); setError(""); setProgress("Preparing order ZIP… Please wait a moment.");
+    try {
+      const drafts = new Map<string, Awaited<ReturnType<typeof loadDesignDraft>>>();
+      const archive = await buildOrderZip(order, async (asset) => {
+        if (asset.storagePath) {
+          const response = await fetch(`/api/orders/assets?path=${encodeURIComponent(asset.storagePath)}`, { cache: "no-store" });
+          if (!response.ok) throw new Error(`Could not download ${asset.fileName}. Refresh orders or check your administrator session.`);
+          return response.blob();
+        }
+        if (asset.designId && !drafts.has(asset.designId)) drafts.set(asset.designId, await loadDesignDraft(asset.designId));
+        const blob = asset.designId ? drafts.get(asset.designId)?.assets.find((entry) => entry.kind === asset.kind && entry.fileName === asset.fileName)?.blob : undefined;
+        if (!blob) throw new Error(`The file ${asset.fileName} is no longer available on this device.`);
+        return blob;
+      }, (done, total) => setProgress(`Preparing order ZIP… ${done} of ${total} files ready.`));
+      const url = URL.createObjectURL(archive.blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = archive.fileName;
+      document.body.appendChild(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setProgress("Order ZIP is ready. Download started.");
+    } catch (failure) {
+      setProgress(""); setError(failure instanceof Error ? failure.message : "The order ZIP could not be prepared.");
+    } finally { setBusy(false); }
+  };
+  return <div className="order-zip-download" aria-busy={busy}>
+    <button type="button" disabled={busy || order.purgeStarted} onClick={download}>{busy ? <LoaderCircle size={16} className="spin" /> : <Download size={16} />} {busy ? "Preparing ZIP…" : "Download full order ZIP"}</button>
+    {progress && <span role="status">{progress}</span>}
+    {error && <p role="alert">{error}</p>}
   </div>;
 }
