@@ -13,6 +13,7 @@ import { CartDrawer } from "./CartDrawer";
 import { contact } from "@/lib/siteConfig";
 import { hasSupabaseConfiguration } from "@/lib/supabase/config";
 import { refreshSharedProducts } from "@/lib/sharedCatalog";
+import { isProductAvailable } from "@/lib/productAvailability";
 
 export function Storefront({ initialProducts = products }: { initialProducts?: Product[] }) {
   const productGridRef = useRef<HTMLDivElement>(null);
@@ -23,7 +24,7 @@ export function Storefront({ initialProducts = products }: { initialProducts?: P
   const [searchQuery, setSearchQuery] = useState("");
   const [catalogue, setCatalogue] = useState<Product[]>(initialProducts);
   const [catalogueError, setCatalogueError] = useState("");
-  const categories = useMemo(() => ["All gifts", ...Array.from(new Set(catalogue.map((product) => product.category)))], [catalogue]);
+  const categories = useMemo(() => ["All gifts", ...Array.from(new Set(catalogue.filter(isProductAvailable).map((product) => product.category)))], [catalogue]);
 
   useEffect(() => {
     const refresh = () => setCatalogue(loadAllProducts());
@@ -43,7 +44,7 @@ export function Storefront({ initialProducts = products }: { initialProducts?: P
   }, []);
 
   const visibleProducts = useMemo(() => {
-    const matches = filterProducts(catalogue, searchQuery);
+    const matches = filterProducts(catalogue.filter(isProductAvailable), searchQuery);
     return category === "All gifts" ? matches : matches.filter((product) => product.category === category);
   }, [catalogue, category, searchQuery]);
   const searching = Boolean(searchQuery.trim());

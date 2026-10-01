@@ -6,6 +6,7 @@ import { refreshSharedProducts } from "@/lib/sharedCatalog";
 import { formatPrice, type Product } from "@/lib/products";
 import { isTShirtCategory, T_SHIRT_SIZES } from "@/lib/productSizes";
 import { showSuccess } from "@/lib/notifications";
+import { isProductAvailable } from "@/lib/productAvailability";
 
 export function OfflineCounter() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -36,7 +37,7 @@ export function OfflineCounter() {
       <label>Phone (optional)<input type="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
       <label>Address / note (optional)<input maxLength={2000} value={address} onChange={(event) => setAddress(event.target.value)} /></label>
       {lines.map((line, index) => { const product = products.find((entry) => entry.slug === line.slug); const update = (patch: Partial<typeof line>) => setLines((current) => current.map((entry, slot) => slot === index ? { ...entry, ...patch } : entry)); return <div className="counter-line" key={index}>
-        <label>Product<select required value={line.slug} onChange={(event) => update({ slug: event.target.value, size: "" })}><option value="">Choose product</option>{products.map((entry) => <option key={entry.id} value={entry.slug} disabled={entry.stockQuantity === 0}>{entry.name} · {formatPrice(entry.price)}{entry.stockQuantity == null ? "" : ` · ${entry.stockQuantity} in stock`}</option>)}</select></label>
+        <label>Product<select required value={line.slug} onChange={(event) => update({ slug: event.target.value, size: "" })}><option value="">Choose product</option>{products.filter(isProductAvailable).map((entry) => <option key={entry.id} value={entry.slug}>{entry.name} · {formatPrice(entry.price)}{entry.stockQuantity == null ? "" : ` · ${entry.stockQuantity} in stock`}</option>)}</select></label>
         {product && isTShirtCategory(product.category) && <label>Size<select required value={line.size} onChange={(event) => update({ size: event.target.value })}><option value="">Choose size</option>{T_SHIRT_SIZES.map((size) => <option key={size}>{size}</option>)}</select></label>}
         <label>Quantity<input required type="number" min="1" max="99" step="1" value={line.quantity} onChange={(event) => update({ quantity: Number(event.target.value) })} /></label>
         {lines.length > 1 && <button type="button" onClick={() => setLines((current) => current.filter((_, slot) => slot !== index))}>Remove</button>}
