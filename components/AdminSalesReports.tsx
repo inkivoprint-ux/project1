@@ -30,11 +30,12 @@ export function AdminSalesReports() {
         finally { setBusy(false); }
       }}>View report</button>
     </fieldset>
-    {orders && <><p><strong>{orders.length} orders · {orders.reduce((sum, order) => sum + order.items.reduce((count, item) => count + item.quantity, 0), 0)} units · {formatPrice(orders.reduce((sum, order) => sum + order.subtotal, 0))}</strong></p>
+    {orders && <><p><strong>{orders.length} orders · {orders.reduce((sum, order) => sum + order.items.reduce((count, item) => count + item.quantity, 0), 0)} units</strong></p>
+      <p><strong>Grand total: {formatPrice(orders.reduce((sum, order) => sum + order.subtotal, 0))}</strong></p>
       <button disabled={busy} type="button" onClick={() => {
         const url = URL.createObjectURL(new Blob([salesReportCsv(orders)], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = `inkivo-${channel}-${from}-to-${to}.csv`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); setDownloaded(orders); setMessage("Report download started. Keep your saved copy before deleting orders.");
       }}>Download report CSV</button>
-      <div className="report-table"><table><thead><tr><th>Order</th><th>Customer</th><th>Order value</th></tr></thead><tbody>{orders.map((order) => <tr key={order.id}><td>{order.orderNumber}</td><td>{order.customerName}</td><td>{formatPrice(order.subtotal)}</td></tr>)}</tbody></table></div>
+      <div className="report-table"><table><thead><tr><th>Order</th><th>Customer</th><th>Order value</th></tr></thead><tbody>{orders.map((order) => <tr key={order.id}><td>{order.orderNumber}</td><td>{order.customerName}</td><td>{formatPrice(order.subtotal)}</td></tr>)}</tbody><tfoot><tr><th scope="row" colSpan={2}>Grand total</th><td><strong>{formatPrice(orders.reduce((sum, order) => sum + order.subtotal, 0))}</strong></td></tr></tfoot></table></div>
     </>}
     {downloaded && downloaded.length > 0 && <button type="button" className="report-delete" disabled={busy} onClick={async () => {
       if (!window.confirm(`Have you saved the CSV report and any artwork ZIPs you need? Permanently delete these ${downloaded.length} ${channel} orders from ${from} to ${to}, including customer details and artwork? This cannot be undone. They will disappear from future reports. Stock will not be restored.`)) return;

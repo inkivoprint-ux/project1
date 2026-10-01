@@ -15,7 +15,7 @@ export function salesReportCsv(orders: OrderRecord[]) {
     ["Order", "Date (India)", "Channel", "Customer", "Phone", "Address", "Product", "Size", "Quantity", "Unit price INR", "Line total INR", "Status"],
     ...orders.flatMap((order) => order.items.map((item) => [order.orderNumber, new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }), order.salesChannel ?? "online", order.customerName, order.phone, order.address, item.productName, item.size ?? "", item.quantity, item.unitPrice, item.quantity * item.unitPrice, order.deletedAt ? "Trash" : order.completedAt ? "Completed" : "Submitted"])),
     [], ["Total orders", orders.length], ["Total units", orders.reduce((sum, order) => sum + order.items.reduce((count, item) => count + item.quantity, 0), 0)],
-    ["Total order value INR", orders.reduce((sum, order) => sum + order.subtotal, 0)],
+    ["Grand total INR", orders.reduce((sum, order) => sum + order.subtotal, 0)],
     ["Note", "Online values represent submitted WhatsApp orders, not verified collected payments."],
   ].map((row) => row.map(cell).join(",")).join("\r\n");
 }
