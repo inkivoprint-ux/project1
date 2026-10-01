@@ -88,3 +88,27 @@ it("reuses one design upload across T-shirt sizes and rejects mismatched referen
   shared.items[1].assets.forEach((asset) => { asset.designId = "different-design"; });
   expect(() => collectOrderFiles(parseOrderPayload(shared), data)).toThrow("does not match");
 });
+
+describe("two-image order files", () => {
+  const originals = [
+    { kind: "original", slot: 0, fileName: "design-1-photo.png", mimeType: "image/png", designId: "design-1" },
+    { kind: "original", slot: 1, fileName: "design-1-logo.png", mimeType: "image/png", designId: "design-1" },
+  ];
+  it("keeps both originals distinct, including shared uploads across size lines", () => {
+    const item = { ...payload.items[0], assets: [...originals, ...payload.items[0].assets].map((asset) => ({ ...asset, uploadItemIndex: 0 })) };
+    const parsed = parseOrderPayload({ ...payload, subtotal: payload.subtotal * 2, items: [item, item] });
+    const form = new FormData();
+    form.set("asset:0:original", new File(["photo"], originals[0].fileName, { type: "image/png" }));
+    form.set("asset:0:original:1", new File(["logo"], originals[1].fileName, { type: "image/png" }));
+    form.set("asset:0:edited", new File(["edited"], "design-1-cropped.png", { type: "image/png" }));
+    form.set("asset:0:preview", new File(["preview"], "design-1-preview.png", { type: "image/png" }));
+    const files = collectOrderFiles(parsed, form);
+    expect(files.get("asset:1:original")?.name).toBe(originals[0].fileName);
+    expect(files.get("asset:1:original:1")?.name).toBe(originals[1].fileName);
+    expect(files.size).toBe(8);
+  });
+  it("rejects duplicate image slots and extra composite layers", () => {
+    expect(() => parseOrderPayload({ ...payload, items: [{ ...payload.items[0], assets: [...originals.map((asset) => ({ ...asset, slot: 0 })), ...payload.items[0].assets] }] })).toThrow("Duplicate");
+    expect(() => parseOrderPayload({ ...payload, items: [{ ...payload.items[0], assets: [...payload.items[0].assets, { ...payload.items[0].assets[0], slot: 1 }] }] })).toThrow("Duplicate");
+  });
+});

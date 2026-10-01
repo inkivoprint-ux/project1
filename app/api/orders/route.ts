@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHash, createHmac } from "node:crypto";
 import type { OrderAsset, OrderItemRecord, OrderRecord } from "@/lib/orders";
-import { assertOrderProduct, collectOrderFiles, parseOrderPayload, MAX_ORDER_REQUEST_BYTES } from "@/lib/orderSubmission";
+import { assertOrderProduct, collectOrderFiles, orderAssetKey, parseOrderPayload, MAX_ORDER_REQUEST_BYTES } from "@/lib/orderSubmission";
 import { products } from "@/lib/products";
 import { getAdminSession } from "@/lib/supabase/admin";
 import { cloudOrderRecord, type CloudOrderRow } from "@/lib/cloudOrders";
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
 
         const assets: OrderAsset[] = [];
         for (const declaredAsset of item.assets) {
-          const file = orderFiles.get(`asset:${index}:${declaredAsset.kind}`);
+          const file = orderFiles.get(orderAssetKey(index, declaredAsset));
           if (!file) throw new Error(`The file ${declaredAsset.fileName} is missing.`);
           const storagePath = `orders/${orderRow.id}/${orderItem.id}/${declaredAsset.kind}/${file.name}`;
           const upload = await supabase.storage.from("order-assets").upload(storagePath, file, { contentType: file.type, upsert: false });
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
           uploadedPaths.push(storagePath);
           const metadata = await supabase.from("generated_files").insert({ customization_id: customization.id, kind: declaredAsset.kind, storage_path: storagePath, original_filename: file.name, mime_type: file.type, file_size: file.size }).select("id").single();
           if (metadata.error) throw metadata.error;
-          assets.push({ kind: declaredAsset.kind, fileName: file.name, mimeType: file.type, storagePath, designId: item.designId });
+          assets.push({ kind: declaredAsset.kind, slot: declaredAsset.slot, fileName: file.name, mimeType: file.type, storagePath, designId: item.designId });
         }
         completedItems.push({ ...item, assets });
       }

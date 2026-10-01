@@ -1,6 +1,6 @@
 import type { CartEntry } from "./cart";
 import type { Product } from "./products";
-import { assertOrderUploadBudget, parseOrderPayload } from "./orderSubmission";
+import { assertOrderUploadBudget, parseOrderPayload, orderAssetKey } from "./orderSubmission";
 import { hasSupabaseConfiguration } from "./supabase/config";
 import { z } from "zod";
 import { assertOrderCanBePurged, transitionOrder, type OrderManagementAction } from "./orderManagement";
@@ -8,9 +8,9 @@ import { assertProductSize, T_SHIRT_SIZES, type TShirtSize } from "./productSize
 
 export type AssetKind = "original" | "edited" | "preview";
 export type ImageMimeType = "image/jpeg" | "image/png" | "image/webp";
-export type DraftAsset = { kind: AssetKind; fileName: string; mimeType: ImageMimeType; blob: Blob };
+export type DraftAsset = { kind: AssetKind; slot?: number; fileName: string; mimeType: ImageMimeType; blob: Blob };
 export type DesignDraft = { id: string; productId: string; configuration: Record<string, unknown>; assets: DraftAsset[]; createdAt: string };
-export type OrderAsset = { kind: AssetKind; fileName: string; mimeType: string; storagePath?: string; uploadItemIndex?: number; designId?: string };
+export type OrderAsset = { kind: AssetKind; slot?: number; fileName: string; mimeType: string; storagePath?: string; uploadItemIndex?: number; designId?: string };
 export type OrderItemRecord = { productId: string; productName: string; quantity: number; unitPrice: number; size?: TShirtSize; designId?: string; configuration?: Record<string, unknown>; assets: OrderAsset[] };
 export type OrderRecord = {
   id: string; orderNumber: string; customerName: string; phone: string; address: string; subtotal: number;
@@ -35,7 +35,7 @@ const savedOrderSchema = z.object({
     productId: z.string().min(1), productName: z.string(), quantity: z.number().int().min(1).max(99), unitPrice: z.number().finite().nonnegative(),
     designId: z.string().optional(), configuration: z.record(z.unknown()).optional(),
     size: z.enum(T_SHIRT_SIZES).optional(),
-    assets: z.array(z.object({ kind: z.enum(["original", "edited", "preview"]), fileName: z.string().min(1), mimeType: z.string(), storagePath: z.string().optional(), designId: z.string().optional() })),
+    assets: z.array(z.object({ kind: z.enum(["original", "edited", "preview"]), slot: z.number().int().min(0).max(1).optional(), fileName: z.string().min(1), mimeType: z.string(), storagePath: z.string().optional(), designId: z.string().optional() })),
   })),
 });
 
@@ -188,9 +188,9 @@ export async function submitCartOrder(args: { cart: CartEntry[]; products: Produ
       const prepared = await Promise.all(draft.assets.map(prepareCheckoutAsset));
       shared = { itemIndex, assets: prepared };
       uploadedDesigns.set(draft.id, shared);
-      prepared.forEach((asset) => formData.append(`asset:${itemIndex}:${asset.kind}`, asset.blob, asset.fileName));
+      prepared.forEach((asset) => formData.append(orderAssetKey(itemIndex, asset), asset.blob, asset.fileName));
     }
-    const assets = shared?.assets.map((asset) => ({ kind: asset.kind, fileName: asset.fileName, mimeType: asset.mimeType, designId: draft!.id, uploadItemIndex: shared!.itemIndex })) ?? [];
+    const assets = shared?.assets.map((asset) => ({ kind: asset.kind, slot: asset.slot, fileName: asset.fileName, mimeType: asset.mimeType, designId: draft!.id, uploadItemIndex: shared!.itemIndex })) ?? [];
     items.push({ productId: product.id, productName: product.name, quantity: entry.quantity, unitPrice: product.price, ...(entry.size ? { size: entry.size } : {}), designId: draft?.id, configuration: draft?.configuration, assets });
   }
   const subtotal = items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);

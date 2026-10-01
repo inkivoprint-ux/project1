@@ -158,7 +158,7 @@ export function loadLocalTemplate(product: Product): TemplateConfig {
       ...parsed,
       area: { ...defaults.area, ...parsed.area },
       backArea: parsed.backArea ? { ...(defaults.backArea ?? defaults.area), ...parsed.backArea } : defaults.backArea,
-      tools: { ...defaults.tools, ...parsed.tools, maxImages: 1 },
+      tools: { ...defaults.tools, ...parsed.tools, maxImages: parsed.tools?.maxImages === 2 ? 2 : 1 },
     };
     validateTemplate(config);
     return config;
@@ -228,6 +228,7 @@ export function subscribeToTemplates(callback: () => void) {
 
 export function validateTemplate(config: TemplateConfig) {
   if (!Number.isInteger(config.version) || config.version < 1 || !config.area || !config.tools || Object.entries(config.tools).some(([key, value]) => key !== "maxImages" && typeof value !== "boolean")) throw new Error("The template settings are invalid.");
+  if (![1, 2].includes(config.tools.maxImages)) throw new Error("Choose one or two photo layers.");
   for (const area of [config.area, config.backArea].filter((value): value is TemplateArea => Boolean(value))) {
     if (area.maskShape !== undefined && !isMaskShape(area.maskShape)) throw new Error("Choose a supported print mask shape.");
     if ([area.brightness, area.contrast, area.saturation].some((value) => value !== undefined && (!Number.isFinite(value) || value < 0 || value > 200))) throw new Error("Colour adjustments must be between 0% and 200%.");

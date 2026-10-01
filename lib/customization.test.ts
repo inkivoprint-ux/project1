@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultTemplate, maskClipPath } from "./customization";
+import { createDefaultTemplate, maskClipPath, validateTemplate } from "./customization";
 import { products } from "./products";
 
 describe("customization templates", () => {
@@ -48,4 +48,12 @@ describe("customization templates", () => {
     expect(maskClipPath("tapered")).toContain("polygon");
     expect(maskClipPath("custom", [{ x: 10, y: 10 }, { x: 90, y: 10 }, { x: 50, y: 90 }])).toBe("polygon(10% 10%, 90% 10%, 50% 90%)");
   });
+});
+
+it("supports an optional second photo layer and rejects unsupported counts", () => {
+  const template = createDefaultTemplate(products[0]);
+  template.tools.maxImages = 2;
+  expect(() => validateTemplate(template)).not.toThrow();
+  template.tools.maxImages = 3;
+  expect(() => validateTemplate(template)).toThrow("one or two");
 });

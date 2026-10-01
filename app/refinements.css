@@ -441,3 +441,11 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--sans); letter-spacing: -.02em; }
   .hero h1 { font-size: clamp(34px, 9vw, 48px); }
   .section-heading h2, .story-copy h2, .how-copy h2, .gifting-cta h2 { font-size: clamp(28px, 7.5vw, 38px); }
 }
+
+.photo-layer-picker { display: flex; gap: 8px; margin-bottom: 18px; }
+.photo-layer-picker button { flex: 1; min-height: 44px; display: flex; justify-content: center; align-items: center; gap: 6px; border: 1px solid var(--line); background: white; color: var(--green); border-radius: 8px; font-size: 13px; cursor: pointer; }
+.photo-layer-picker button.active { border-color: var(--green); background: #e8efeb; font-weight: 700; }
+
+.customizer-shell .mapped-layer.photo-layer-1 { z-index: 5; }
+.customizer-shell .mapped-layer.text-layer { z-index: 6; }
+.customizer-shell .print-boundary { z-index: 7; }

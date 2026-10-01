@@ -68,7 +68,7 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
   const replaceArea = (current: TemplateConfig, nextArea: TemplateArea): TemplateConfig => view === "back" ? { ...current, status: "draft", backArea: nextArea } : { ...current, status: "draft", area: nextArea };
   const updateArea = <K extends keyof TemplateArea>(key: K, value: TemplateArea[K]) => setTemplate((current) => { const currentArea = view === "back" ? current.backArea ?? current.area : current.area; return replaceArea(current, { ...currentArea, [key]: value }); });
   const updateTool = <K extends keyof TemplateConfig["tools"]>(key: K, value: TemplateConfig["tools"][K]) => setTemplate((current) => ({ ...current, status: "draft", tools: { ...current.tools, [key]: value } }));
-  const updateSizingTool = (value: boolean) => setTemplate((current) => ({ ...current, status: "draft", tools: { ...current.tools, allowScale: value, allowCrop: value, maxImages: 1 } }));
+  const updateSizingTool = (value: boolean) => setTemplate((current) => ({ ...current, status: "draft", tools: { ...current.tools, allowScale: value, allowCrop: value } }));
   const updatePhysicalWidth = (widthMm: number) => updateArea("widthMm", widthMm);
   const changeSurface = (surface: SurfaceType) => setTemplate((current) => {
     const currentArea = view === "back" ? current.backArea ?? current.area : current.area;
@@ -278,11 +278,12 @@ export function AdminTemplateEditor({ product }: { product: Product }) {
               </ControlSection>}
               {tab === "tools" && <ControlSection title="Customer tools" description="Control what shoppers can change for this product.">
                 <Toggle label="Allow image upload" checked={template.tools.images} onChange={(v) => updateTool("images", v)} />
+                <Toggle label="Allow two photos / photo and logo" checked={template.tools.maxImages === 2} onChange={(v) => updateTool("maxImages", v ? 2 : 1)} />
                 <Toggle label="Allow text" checked={template.tools.text} onChange={(v) => updateTool("text", v)} />
                 <Toggle label="Move artwork" checked={template.tools.allowMove} onChange={(v) => updateTool("allowMove", v)} />
                 <Toggle label="Resize / crop artwork" checked={template.tools.allowScale || template.tools.allowCrop} onChange={updateSizingTool} />
                 <Toggle label="Rotate artwork" checked={template.tools.allowRotate} onChange={(v) => updateTool("allowRotate", v)} />
-                <div className="tool-scope-note"><Check size={14} /><div><strong>One high-resolution photo layer per side</strong><small>Customers can combine that photo with a separate realistic text layer.</small></div></div>
+                <div className="tool-scope-note"><Check size={14} /><div><strong>{template.tools.maxImages === 2 ? "Two independent photo layers per side" : "One high-resolution photo layer per side"}</strong><small>Customers can position each uploaded image separately and add text.</small></div></div>
               </ControlSection>}
             </div>
             <div className="editor-control-footer"><button onClick={restore}><RotateCcw size={15} /> Reset template</button></div>

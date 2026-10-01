@@ -26,8 +26,10 @@ import { SizeQuantitySelector } from "./SizeQuantitySelector";
 import { MockupStage } from "./MockupStage";
 import { loadCanvasImage, exportCanvasBlob } from "@/lib/canvasImages";
 
+type PhotoLayer = { url: string | null; file: File | null; meta: { width: number; height: number } | null; scale: number; rotation: number; x: number; y: number };
+const emptyPhoto = (): PhotoLayer => ({ url: null, file: null, meta: null, scale: 1, rotation: 0, x: 0, y: 0 });
 type ActiveLayer = "image" | "text";
-type DragState = { layer: ActiveLayer; pointerX: number; pointerY: number; originX: number; originY: number } | null;
+type DragState = { imageIndex: number; layer: ActiveLayer; pointerX: number; pointerY: number; originX: number; originY: number } | null;
 
 const anekMalayalam = localFont({
   src: [
@@ -79,13 +81,9 @@ function getMalayalamFont(font: TextFont) {
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export function Customizer({ product }: { product: Product }) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [imageScale, setImageScale] = useState(1);
-  const [imageRotation, setImageRotation] = useState(0);
-  const [imageX, setImageX] = useState(0);
-  const [imageY, setImageY] = useState(0);
-  const [imageMeta, setImageMeta] = useState<{ width: number; height: number } | null>(null);
-  const [originalFile, setOriginalFile] = useState<File | null>(null);
+  const [photos, setPhotos] = useState<PhotoLayer[]>(() => [emptyPhoto(), emptyPhoto()]);
+  const [selectedPhoto, setSelectedPhoto] = useState(0);
+  const photoUrlsRef = useRef<string[]>([]);
   const [text, setText] = useState("");
   const [textSize, setTextSize] = useState(28);
   const [textColor, setTextColor] = useState("#ffffff");
@@ -101,7 +99,8 @@ export function Customizer({ product }: { product: Product }) {
   const [textBold, setTextBold] = useState<boolean | null>(null);
   const [textItalic, setTextItalic] = useState<boolean | null>(null);
   const [textRenderState, setTextRenderState] = useState<"rendering" | "ready" | "error">("rendering");
-  const [imageRenderState, setImageRenderState] = useState<"rendering" | "ready" | "error">("rendering");
+  const [photoRenderStates, setPhotoRenderStates] = useState<Array<"rendering" | "ready" | "error">>(["rendering", "rendering"]);
+  const photoRenderCallbacks = useMemo(() => [0, 1].map((index) => (state: "rendering" | "ready" | "error") => setPhotoRenderStates((current) => current[index] === state ? current : current.map((value, slot) => slot === index ? state : value))), []);
   const [malayalamFontStatus, setMalayalamFontStatus] = useState<"loading" | "ready" | "error">("loading");
   const [loadedMalayalamFont, setLoadedMalayalamFont] = useState("");
   const [activeLayer, setActiveLayer] = useState<ActiveLayer>("image");
@@ -127,13 +126,24 @@ export function Customizer({ product }: { product: Product }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const artworkRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState>(null);
+  const photoCount = template.tools.maxImages === 2 ? 2 : 1;
+  const activePhotoIndex = Math.min(selectedPhoto, photoCount - 1);
+  const photo = photos[activePhotoIndex];
+  const { url: imageUrl, meta: imageMeta, scale: imageScale, rotation: imageRotation, x: imageX, y: imageY } = photo;
+  const imageRenderState = photoRenderStates[activePhotoIndex];
+  const updatePhoto = (patch: Partial<PhotoLayer>, index = activePhotoIndex) => setPhotos((current) => current.map((entry, slot) => slot === index ? { ...entry, ...patch } : entry));
+  const setImageScale = (scale: number) => updatePhoto({ scale });
+  const setImageRotation = (rotation: number) => updatePhoto({ rotation });
+  const setImageX = (x: number) => updatePhoto({ x });
+  const setImageY = (y: number) => updatePhoto({ y });
+  const hasPhotos = template.tools.images && photos.slice(0, photoCount).some((entry) => entry.url);
   const textStyle = getTextStyle(font, textBold, textItalic);
   const selectedMalayalamFont = getMalayalamFont(font);
   const malayalamFontKey = `${textStyle.italic ? "italic " : ""}${textStyle.weight} 48px ${selectedMalayalamFont?.family ?? anekMalayalam.style.fontFamily}`;
   const waitingForTextFont = Boolean(selectedMalayalamFont) && Boolean(text.trim()) && (malayalamFontStatus !== "ready" || loadedMalayalamFont !== malayalamFontKey);
   const textArtwork = useMemo(() => typeof document === "undefined" || !text.trim() || waitingForTextFont ? null : createTextArtwork(text, textColor, font, textSize, textStyle.weight, textStyle.italic), [text, textColor, font, textSize, textStyle.weight, textStyle.italic, waitingForTextFont]);
   const waitingForTextRender = Boolean(template.tools.text && textArtwork && textRenderState !== "ready");
-  const waitingForImageRender = Boolean(template.tools.images && imageUrl && imageRenderState !== "ready");
+  const waitingForImageRender = Boolean(template.tools.images && photos.slice(0, photoCount).some((entry, index) => entry.url && photoRenderStates[index] !== "ready"));
   const allowsBackView = Boolean(product.views?.some((item) => item.id === "back"));
 
   useEffect(() => {
@@ -167,16 +177,17 @@ export function Customizer({ product }: { product: Product }) {
     const unsubscribe = subscribeToTemplates(refresh);
     return () => { window.clearTimeout(timer); unsubscribe(); };
   }, [product]);
-  useEffect(() => () => { if (imageUrl) URL.revokeObjectURL(imageUrl); }, [imageUrl]);
+  useEffect(() => { photoUrlsRef.current = photos.flatMap((entry) => entry.url ? [entry.url] : []); }, [photos]);
+  useEffect(() => () => { photoUrlsRef.current.forEach((url) => URL.revokeObjectURL(url)); }, []);
   const area = view === "back" ? template.backArea ?? template.area : template.area;
   const productView = product.views?.find((item) => item.id === view) ?? { id: "front", label: "Front", image: product.image };
   const mockupSrc = template.mockupImages?.[view] ?? productView.image;
   const surfaceMap = area.surfaceMap;
-  const hasDesign = Boolean((template.tools.images && imageUrl) || (template.tools.text && textArtwork));
+  const hasDesign = Boolean(hasPhotos || (template.tools.text && textArtwork));
   const imageSizingEnabled = template.tools.allowScale || template.tools.allowCrop;
   const imagePrintDpi = imageMeta ? estimatedPrintDpi(imageMeta.width, imageMeta.height, area.widthMm, area.heightMm) : null;
   const effectiveActiveLayer: ActiveLayer = activeLayer === "image" && !template.tools.images && template.tools.text ? "text" : activeLayer === "text" && !template.tools.text && template.tools.images ? "image" : activeLayer;
-  const designSignature = JSON.stringify([product.id, product.price, view, imageUrl, imageScale, imageRotation, imageX, imageY, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textWrinkleMap?.key, textStyle.weight, textStyle.italic, template]);
+  const designSignature = JSON.stringify([product.id, product.price, view, photos.slice(0, photoCount).map(({ file, ...placement }) => ({ ...placement, fileName: file?.name })), text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textWrinkleMap?.key, textStyle.weight, textStyle.italic, template]);
   const cartSignature = `${designSignature}:${isTShirt ? serializeSizeQuantities(sizeQuantities) : quantity}`;
   const added = savedDesignSignature === cartSignature;
 
@@ -206,21 +217,13 @@ export function Customizer({ product }: { product: Product }) {
     if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { setMessage("Please upload a JPG, PNG, or WEBP image."); return; }
     if (imageUrl) URL.revokeObjectURL(imageUrl);
     const nextUrl = URL.createObjectURL(file);
-    setImageUrl(nextUrl);
-    setOriginalFile(file);
-    setImageMeta(null);
-    readImageDimensions(nextUrl).then(setImageMeta).catch(() => setImageMeta(null));
+    const index = activePhotoIndex;
+    updatePhoto({ url: nextUrl, file, meta: null, ...(!photo.url && index === 1 ? { scale: 0.45, x: 0, y: -60, rotation: 0 } : {}) }, index);
+    readImageDimensions(nextUrl).then((meta) => setPhotos((current) => current.map((entry, slot) => slot === index && entry.url === nextUrl ? { ...entry, meta } : entry))).catch(() => setMessage("The image dimensions could not be read."));
     setMessage("Photo loaded. Use the placement controls or drag it on the product.");
     setActiveLayer("image");
     setShowBoundary(false);
     event.target.value = "";
-  }
-
-  function resetImagePlacement() {
-    setImageScale(area.defaultArtworkScale ?? 1);
-    setImageRotation(area.defaultArtworkRotation ?? 0);
-    setImageX(area.defaultArtworkOffsetX ?? 0);
-    setImageY(area.defaultArtworkOffsetY ?? 0);
   }
 
   function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
@@ -231,6 +234,7 @@ export function Customizer({ product }: { product: Product }) {
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
       layer,
+      imageIndex: activePhotoIndex,
       pointerX: event.clientX,
       pointerY: event.clientY,
       originX: layer === "image" ? imageX : textX,
@@ -248,18 +252,16 @@ export function Customizer({ product }: { product: Product }) {
     const dy = event.clientY - drag.pointerY;
     const nextX = clamp(drag.originX + (dx * Math.cos(radians) + dy * Math.sin(radians)) / unit, -artwork.offsetWidth / unit / 2, artwork.offsetWidth / unit / 2);
     const nextY = clamp(drag.originY + (-dx * Math.sin(radians) + dy * Math.cos(radians)) / unit, -artwork.offsetHeight / unit / 2, artwork.offsetHeight / unit / 2);
-    if (drag.layer === "image") { setImageX(Math.round(nextX)); setImageY(Math.round(nextY)); }
+    if (drag.layer === "image") { updatePhoto({ x: Math.round(nextX), y: Math.round(nextY) }, drag.imageIndex); }
     else { setTextX(Math.round(nextX)); setTextY(Math.round(nextY)); }
   }
 
   function endDrag() { dragRef.current = null; }
 
   function reset() {
-    if (imageUrl) URL.revokeObjectURL(imageUrl);
-    setImageUrl(null);
-    setImageMeta(null);
-    setOriginalFile(null);
-    resetImagePlacement();
+    photos.forEach((entry) => { if (entry.url) URL.revokeObjectURL(entry.url); });
+    setPhotos([0, 1].map(() => ({ ...emptyPhoto(), scale: area.defaultArtworkScale ?? 1, rotation: area.defaultArtworkRotation ?? 0, x: area.defaultArtworkOffsetX ?? 0, y: area.defaultArtworkOffsetY ?? 0 })));
+    setSelectedPhoto(0);
     setText("");
     setTextSize(28);
     setTextColor("#ffffff");
@@ -279,10 +281,7 @@ export function Customizer({ product }: { product: Product }) {
   function changeView(nextView: "front" | "back") {
     const nextArea = nextView === "back" ? template.backArea ?? template.area : template.area;
     setView(nextView);
-    setImageScale(nextArea.defaultArtworkScale ?? 1);
-    setImageRotation(nextArea.defaultArtworkRotation ?? 0);
-    setImageX(nextArea.defaultArtworkOffsetX ?? 0);
-    setImageY(nextArea.defaultArtworkOffsetY ?? 0);
+    setPhotos((current) => current.map((entry) => ({ ...entry, scale: nextArea.defaultArtworkScale ?? 1, rotation: nextArea.defaultArtworkRotation ?? 0, x: nextArea.defaultArtworkOffsetX ?? 0, y: nextArea.defaultArtworkOffsetY ?? 0 })));
     setTextRotation(nextArea.defaultArtworkRotation ?? 0);
     setTextX(nextArea.defaultArtworkOffsetX ?? 0);
     setTextY(nextArea.defaultArtworkOffsetY ?? 0);
@@ -292,7 +291,7 @@ export function Customizer({ product }: { product: Product }) {
     if (!templateReady || loadedMockup !== mockupSrc || !purchaseContextReady || purchaseBusyRef.current || waitingForTextFont || waitingForTextRender || waitingForImageRender) return;
     try { createProductPurchaseEntries(product, quantity, sizeQuantities); }
     catch (failure) { setMessage(failure instanceof Error ? failure.message : "Choose your size and quantity."); return; }
-    const requestedDesign = Boolean((template.tools.images && imageUrl) || (template.tools.text && text.trim()));
+    const requestedDesign = Boolean(hasPhotos || (template.tools.text && text.trim()));
     if ((requirePersonalisation || requestedDesign) && !hasDesign) {
       setMessage("Add a photo or text and wait for the preview before ordering with personalisation.");
       return;
@@ -307,10 +306,11 @@ export function Customizer({ product }: { product: Product }) {
         if (!stageRef.current || !artworkRef.current) throw new Error("The design preview is not ready. Please try again.");
         designId = `${product.slug}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
         const assets: DraftAsset[] = [];
-        if (template.tools.images && imageUrl && originalFile) {
-          const mimeType = originalFile.type as DraftAsset["mimeType"];
-          assets.push({ kind: "original", fileName: buildDesignAssetFileName(designId, "original", mimeType), mimeType, blob: originalFile });
-        }
+        if (template.tools.images) photos.slice(0, photoCount).forEach((entry, slot) => {
+          if (!entry.url || !entry.file) return;
+          const mimeType = entry.file.type as DraftAsset["mimeType"];
+          assets.push({ kind: "original", slot, fileName: buildDesignAssetFileName(`${designId}${slot ? "-photo-2" : ""}`, "original", mimeType), mimeType, blob: entry.file });
+        });
         const artworkBlob = await exportArtworkBlob(artworkRef.current);
         const previewBlob = await exportProductPreview(stageRef.current, artworkRef.current, mockupSrc, area.rotation);
         if (!artworkBlob || !previewBlob) throw new Error("The design files could not be generated.");
@@ -321,7 +321,7 @@ export function Customizer({ product }: { product: Product }) {
           productId: product.id,
           createdAt: new Date().toISOString(),
           assets,
-          configuration: { view, imageScale, imageRotation, imageX, imageY, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textBold: textStyle.weight >= 600, textItalic: textStyle.italic, textFontWeight: textStyle.weight, templateId: template.id, templateVersion: template.version, templateSnapshot: { ...template, area, backArea: undefined, mockupImages: undefined } },
+          configuration: { view, imageLayers: photos.slice(0, photoCount).map(({ scale, rotation, x, y, file }) => ({ scale, rotation, x, y, fileName: file?.name })), imageScale, imageRotation, imageX, imageY, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textBold: textStyle.weight >= 600, textItalic: textStyle.italic, textFontWeight: textStyle.weight, templateId: template.id, templateVersion: template.version, templateSnapshot: { ...template, area, backArea: undefined, mockupImages: undefined } },
         });
         preparedDesignRef.current = { signature: designSignature, id: designId };
       }
@@ -394,7 +394,7 @@ export function Customizer({ product }: { product: Product }) {
               onPointerUp={endDrag}
               onPointerCancel={endDrag}
             >
-              {template.tools.images && imageUrl && <div className={`mapped-layer image-layer ${effectiveActiveLayer === "image" ? "selected" : ""}`} style={{ mixBlendMode: previewBlendMode(mappedProps.blendMode, mappedProps.overlayStrength), transform: `rotate(${area.rotation}deg)` }}><WarpedArtwork src={imageUrl} {...mappedProps} onRenderStateChange={setImageRenderState} scale={imageScale} imageRotation={imageRotation} offsetX={imageX} offsetY={imageY} /></div>}
+              {template.tools.images && photos.slice(0, photoCount).map((entry, index) => entry.url && <div key={index} className={`mapped-layer image-layer photo-layer-${index} ${effectiveActiveLayer === "image" && activePhotoIndex === index ? "selected" : ""}`} style={{ mixBlendMode: previewBlendMode(mappedProps.blendMode, mappedProps.overlayStrength), transform: `rotate(${area.rotation}deg)` }}><WarpedArtwork src={entry.url} {...mappedProps} onRenderStateChange={photoRenderCallbacks[index]} scale={entry.scale} imageRotation={entry.rotation} offsetX={entry.x} offsetY={entry.y} /></div>)}
               {template.tools.text && textArtwork && <div className={`mapped-layer text-layer ${effectiveActiveLayer === "text" ? "selected" : ""}`} style={{ mixBlendMode: previewBlendMode(textMappedProps.blendMode, textMappedProps.overlayStrength), transform: `rotate(${area.rotation}deg)` }}><WarpedArtwork src={textArtwork} {...textMappedProps} artworkOpacity={textOpacity / 100} onRenderStateChange={setTextRenderState} scale={1} imageRotation={textRotation} offsetX={textX} offsetY={textY} /></div>}
               {!hasDesign && <div className="art-placeholder"><ImagePlus size={20} /><span>Add photo or text</span></div>}
             </div>
@@ -415,16 +415,17 @@ export function Customizer({ product }: { product: Product }) {
 
           {!template.tools.images && !template.tools.text ? <div className="tool-content tool-disabled"><h2>Personalisation unavailable</h2><p>This product template does not currently allow customer photos or text.</p></div> : effectiveActiveLayer === "image" && template.tools.images ? (
             <div className="tool-content">
-              <h2>{imageUrl ? "Position your photo" : "Add your photo"}</h2>
-              <p>{imageUrl ? "Drag directly on the product, or use the precise controls below. Every change updates the realistic preview immediately." : "Upload a clear JPG, PNG, or WEBP. Inkivo will fit it automatically to the configured product surface."}</p>
+              {photoCount === 2 && <div className="photo-layer-picker" role="group" aria-label="Choose image to edit">{photos.slice(0, photoCount).map((entry, index) => <button key={index} type="button" className={activePhotoIndex === index ? "active" : ""} aria-pressed={activePhotoIndex === index} onClick={() => { endDrag(); setSelectedPhoto(index); }}><ImagePlus size={16} /> {index === 0 ? "Photo · bottom" : "Logo / photo · top"}{entry.url && <Check size={14} />}</button>)}</div>}
+              <h2>{imageUrl ? "Position your image" : "Add your image"}</h2>
+              <p>{imageUrl ? "Drag directly on the product, or use the precise controls below. Every change updates the preview immediately. The second image / logo stays above the main photo." : "Upload a clear JPG, PNG, or WEBP. Use a transparent PNG for a logo and place each image with the controls."}</p>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} hidden />
-              <button className={`upload-zone ${imageUrl ? "compact" : ""}`} onClick={() => fileRef.current?.click()}><span><Upload /></span><strong>{imageUrl ? "Replace photo" : "Upload a photo"}</strong><small>JPG, PNG or WEBP · up to 15 MB</small></button>
+              <button className={`upload-zone ${imageUrl ? "compact" : ""}`} onClick={() => fileRef.current?.click()}><span><Upload /></span><strong>{activePhotoIndex === 1 ? imageUrl ? "Replace logo / second photo" : "Upload logo / second photo" : imageUrl ? "Replace photo" : "Upload a photo"}</strong><small>JPG, PNG or WEBP · up to 15 MB</small></button>
               {imageUrl && <>
                 {imageMeta && <div className={`upload-quality ${imagePrintDpi !== null && imagePrintDpi < 150 ? "warning" : ""}`}><Check size={14} /><div><strong>Original image preserved</strong><small>{imageMeta.width} × {imageMeta.height} px · approximately {imagePrintDpi} DPI at this print size</small></div></div>}
                 {imageSizingEnabled && <label className="control-row"><span><ZoomIn size={16} /> Size / crop <output>{Math.round(imageScale * 100)}%</output></span><input type="range" min="0.35" max="3" step="0.02" value={imageScale} onChange={(event) => setImageScale(Number(event.target.value))} /></label>}
                 {template.tools.allowMove && <div className="position-grid"><NumberControl label="Horizontal" value={imageX} onChange={setImageX} /><NumberControl label="Vertical" value={imageY} onChange={setImageY} /></div>}
                 {template.tools.allowRotate && <label className="control-row"><span><RotateCcw size={16} /> Rotation <output>{imageRotation}°</output></span><input type="range" min="-180" max="180" step="1" value={imageRotation} onChange={(event) => setImageRotation(Number(event.target.value))} /></label>}
-                <button className="remove-artwork" onClick={() => { setImageUrl(null); setImageMeta(null); setOriginalFile(null); }}><Trash2 size={14} /> Remove photo</button>
+                <button className="remove-artwork" onClick={() => { if (imageUrl) URL.revokeObjectURL(imageUrl); updatePhoto({ url: null, meta: null, file: null }); }}><Trash2 size={14} /> Remove photo</button>
               </>}
               {imageUrl && imageRenderState === "error" && <p className="editor-message" role="alert">This photo could not be rendered. Choose a different image and try again.</p>}
             </div>

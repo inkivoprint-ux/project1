@@ -7,6 +7,7 @@ const assetKinds = ["original", "edited", "preview"] as const;
 
 const assetSchema = z.object({
   kind: z.enum(assetKinds),
+  slot: z.number().int().min(0).max(1).optional(),
   fileName: z.string().min(1).max(180).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/).refine((name) => !name.includes("..")),
   mimeType: z.enum(supportedMimeTypes),
   storagePath: z.string().optional(),
@@ -22,7 +23,7 @@ const itemSchema = z.object({
   unitPrice: z.number().finite().nonnegative(),
   designId: z.string().min(1).max(180).optional(),
   configuration: z.record(z.unknown()).optional(),
-  assets: z.array(assetSchema).max(3),
+  assets: z.array(assetSchema).max(4),
 });
 
 const payloadSchema = z.object({
@@ -59,7 +60,7 @@ export function parseOrderPayload(value: unknown): OrderPayload {
 
   for (const item of parsed.data.items) {
     const kinds = new Set(item.assets.map((asset) => asset.kind));
-    if (kinds.size !== item.assets.length) throw new Error(`Duplicate files were supplied for ${item.productName}.`);
+    if (new Set(item.assets.map((asset) => `${asset.kind}:${asset.slot ?? 0}`)).size !== item.assets.length || item.assets.some((asset) => asset.kind !== "original" && (asset.slot ?? 0) !== 0)) throw new Error(`Duplicate files were supplied for ${item.productName}.`);
     if (!item.designId && item.assets.length) throw new Error(`Unexpected customization files were supplied for ${item.productName}.`);
     if (item.designId && (!kinds.has("edited") || !kinds.has("preview"))) {
       throw new Error(`The cropped image and product preview are required for ${item.productName}.`);
@@ -81,9 +82,9 @@ export function collectOrderFiles(payload: OrderPayload, formData: FormData) {
       const uploadIndex = asset.uploadItemIndex ?? itemIndex;
       if (uploadIndex > itemIndex) throw new Error("Invalid shared order file reference.");
       const original = payload.items[uploadIndex];
-      const declaration = original?.assets.find((entry) => entry.kind === asset.kind);
+      const declaration = original?.assets.find((entry) => entry.kind === asset.kind && (entry.slot ?? 0) === (asset.slot ?? 0));
       if (!declaration || original.designId !== item.designId || original.productId !== item.productId || declaration.fileName !== asset.fileName || declaration.mimeType !== asset.mimeType || (declaration.uploadItemIndex ?? uploadIndex) !== uploadIndex) throw new Error("The shared customization file does not match this item.");
-      const key = `asset:${uploadIndex}:${asset.kind}`;
+      const key = orderAssetKey(uploadIndex, asset);
       expectedKeys.add(key);
       if (formData.getAll(key).length !== 1) throw new Error(`Exactly one file is required for ${asset.fileName}.`);
       const value = formData.get(key);
@@ -93,7 +94,7 @@ export function collectOrderFiles(payload: OrderPayload, formData: FormData) {
         throw new Error(`${asset.fileName} must be a JPG, PNG, or WebP image.`);
       }
       if (value.size > 20 * 1024 * 1024) throw new Error(`${asset.fileName} exceeds 20 MB.`);
-      files.set(`asset:${itemIndex}:${asset.kind}`, value);
+      files.set(orderAssetKey(itemIndex, asset), value);
     });
   });
 
@@ -105,4 +106,8 @@ export function collectOrderFiles(payload: OrderPayload, formData: FormData) {
 
 export function assertOrderProduct(item: OrderItemRecord, product: { name: string; base_price: number | string; offer_price: number | string | null; is_active: boolean } | null) {
   if (!product || !product.is_active || product.name !== item.productName || Number(product.offer_price ?? product.base_price) !== item.unitPrice) throw new Error("A product or price has changed. Refresh your cart before submitting. Browser-only products must be added to the shared catalogue first.");
+}
+
+export function orderAssetKey(index: number, asset: { kind: string; slot?: number }) {
+  return `asset:${index}:${asset.kind}${asset.slot ? `:${asset.slot}` : ""}`;
 }
