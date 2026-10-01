@@ -5,7 +5,7 @@ import { type BlendMode, type MaskPoint, type MaskShape, type SurfaceType, type 
 import { applyOverlayStrength, previewBlendMode } from "@/lib/artworkBlend";
 import { adjustArtworkPixels } from "@/lib/artworkColor";
 import { finishArtwork } from "@/lib/artworkFinishing";
-import { calculateRenderSize, containImageSize } from "@/lib/renderQuality";
+import { calculateRenderSize, calculateInteractiveRenderSize, containImageSize } from "@/lib/renderQuality";
 import { loadCanvasImage } from "@/lib/canvasImages";
 import { curvedSourcePosition, surfaceCurveAngle, surfaceRowScale } from "@/lib/surfaceGeometry";
 
@@ -80,15 +80,10 @@ export function WarpedArtwork({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
     if (!context) { onRenderStateChange?.("error"); return; }
-    const { width, height } = renderSize;
-    canvas.width = width;
-    canvas.height = height;
-    enableHighQuality(context);
-    context.clearRect(0, 0, width, height);
+    if (!src) { context.clearRect(0, 0, canvas.width, canvas.height); return; }
     onRenderStateChange?.("rendering");
-    if (!src) return;
     let cancelled = false;
 
     const cachedImage = (url: string) => {
@@ -102,12 +97,18 @@ export function WarpedArtwork({
     };
     // Keep only this layer's source and map, avoiding repeated image decoding on slider input.
     for (const key of imageCache.current.keys()) if (key !== src && key !== surfaceMap && key !== mockupSrc) imageCache.current.delete(key);
-    Promise.all([
+    let renderVersion = 0;
+    const render = (width: number, height: number, final: boolean) => {
+      const version = ++renderVersion;
+      return Promise.all([
       cachedImage(src),
       surface === "fabric" && surfaceMap ? cachedImage(surfaceMap).catch(() => null) : Promise.resolve(null),
       blendMode === "overlay" && overlayStrength > 0 && overlayStrength < 100 && mockupSrc ? cachedImage(mockupSrc) : Promise.resolve(null),
     ]).then(([image, mapImage, productImage]) => {
-      if (cancelled) return;
+      if (cancelled || version !== renderVersion) return;
+      canvas.width = width;
+      canvas.height = height;
+      enableHighQuality(context);
       const work = document.createElement("canvas");
       work.width = width;
       work.height = height;
@@ -166,11 +167,24 @@ export function WarpedArtwork({
       }
       // Masks, perspective and opacity must be pixels, not preview-only CSS.
       finishArtwork(context, canvas, { opacity: opacity * artworkOpacity, perspective, maskRadius, maskShape, maskPoints });
-      onRenderStateChange?.("ready");
+      if (final) onRenderStateChange?.("ready");
     }).catch(() => {
-      if (!cancelled) { context.clearRect(0, 0, width, height); onRenderStateChange?.("error"); }
+      if (!cancelled && version === renderVersion) { context.clearRect(0, 0, width, height); onRenderStateChange?.("error"); }
     });
-    return () => { cancelled = true; };
+    };
+    // Coalesce slider input into animation frames. On touch devices, render fewer
+    // pixels while editing, then restore export quality only after input settles.
+    const touchDevice = window.matchMedia("(pointer: coarse)").matches;
+    const interactiveSize = touchDevice ? calculateInteractiveRenderSize(renderSize) : renderSize;
+    const reduced = interactiveSize.width !== renderSize.width || interactiveSize.height !== renderSize.height;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    const frame = requestAnimationFrame(() => {
+      void render(interactiveSize.width, interactiveSize.height, !reduced);
+      if (reduced) settleTimer = setTimeout(() => {
+        if (!cancelled) void render(renderSize.width, renderSize.height, true);
+      }, 180);
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); clearTimeout(settleTimer); };
   }, [src, curvature, taper, scale, imageRotation, offsetX, offsetY, surface, precisionWrap, wrapAngle, edgeFade, surfaceMap, displacementStrength, fabricBlendStrength, fabricTextureStrength, blendMode, overlayStrength, mockupSrc, backdropArea, brightness, contrast, saturation, surfaceShading, deformationIntensity, verticalDeformation, artworkOpacity, opacity, perspective, maskRadius, maskShape, maskPoints, onRenderStateChange, renderSize]);
 
   // Blend the enclosing positioned layer against the photograph, not inside an

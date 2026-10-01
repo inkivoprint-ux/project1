@@ -28,3 +28,10 @@ export function estimatedPrintDpi(imageWidth: number, imageHeight: number, print
   const vertical = imageHeight / Math.max(0.1, printHeightMm / 25.4);
   return Math.round(Math.min(horizontal, vertical));
 }
+
+// A bounded touch preview avoids high-DPI phones multiplying per-pixel work.
+// The settled preview and checkout continue to use calculateRenderSize.
+export function calculateInteractiveRenderSize(size: RenderSize): RenderSize {
+  const scale = Math.min(1, 600 / Math.max(size.width, size.height), Math.sqrt(160_000 / Math.max(1, size.width * size.height)));
+  return { width: Math.max(1, Math.floor(size.width * scale)), height: Math.max(1, Math.floor(size.height * scale)) };
+}

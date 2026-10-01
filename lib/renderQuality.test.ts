@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateRenderSize, containImageSize, estimatedPrintDpi } from "./renderQuality";
+import { calculateRenderSize, calculateInteractiveRenderSize, containImageSize, estimatedPrintDpi } from "./renderQuality";
 
 describe("high-quality preview rendering", () => {
   it("renders at least two physical pixels per CSS pixel while preserving the print-area ratio", () => {
@@ -19,5 +19,17 @@ describe("high-quality preview rendering", () => {
 
   it("reports the limiting print resolution", () => {
     expect(estimatedPrintDpi(3000, 4000, 254, 254)).toBe(300);
+  });
+});
+
+describe("touch interaction render budget", () => {
+  it("bounds expensive high-DPI previews while preserving their aspect ratio", () => {
+    const size = calculateInteractiveRenderSize({ width: 1200, height: 1800 });
+    expect(size.width * size.height).toBeLessThanOrEqual(160_000);
+    expect(Math.max(size.width, size.height)).toBeLessThanOrEqual(600);
+    expect(size.width / size.height).toBeCloseTo(2 / 3, 2);
+  });
+  it("does not enlarge an already small preview", () => {
+    expect(calculateInteractiveRenderSize({ width: 120, height: 200 })).toEqual({ width: 120, height: 200 });
   });
 });
