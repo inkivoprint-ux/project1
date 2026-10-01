@@ -17,10 +17,14 @@ export function createPurchaseEntry(productId: string, quantity: number, designI
   return { productId, quantity, ...(designId ? { designId } : {}), ...(size ? { size } : {}) };
 }
 
-export function createProductPurchaseEntries(product: Pick<Product, "id" | "category">, quantity: number, sizes?: SizeQuantities, designId?: string): CartEntry[] {
-  if (!isTShirtCategory(product.category)) return [createPurchaseEntry(product.id, quantity, designId)];
+export function createProductPurchaseEntries(product: Pick<Product, "id" | "category" | "stockQuantity">, quantity: number, sizes?: SizeQuantities, designId?: string): CartEntry[] {
+  if (!isTShirtCategory(product.category)) {
+    if (product.stockQuantity != null && quantity > product.stockQuantity) throw new Error(`Only ${product.stockQuantity} units are in stock.`);
+    return [createPurchaseEntry(product.id, quantity, designId)];
+  }
   if (!sizes || T_SHIRT_SIZES.some((size) => !Number.isInteger(sizes[size]) || sizes[size] < 0 || sizes[size] > 99)) throw new Error("Choose a valid quantity for each T-shirt size.");
   const entries = T_SHIRT_SIZES.filter((size) => sizes[size] > 0).map((size) => createPurchaseEntry(product.id, sizes[size], designId, size));
   if (!entries.length) throw new Error("Choose at least one T-shirt size and quantity.");
+  if (product.stockQuantity != null && entries.reduce((sum, entry) => sum + entry.quantity, 0) > product.stockQuantity) throw new Error(`Only ${product.stockQuantity} units are in stock across all sizes.`);
   return entries;
 }

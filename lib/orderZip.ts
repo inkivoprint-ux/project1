@@ -4,7 +4,7 @@ const safeName = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, "_").repla
 
 export function orderDetailsText(order: OrderRecord) {
   return [
-    "INKIVO ORDER DETAILS", `Order number: ${order.orderNumber}`,
+    "INKIVO ORDER DETAILS", `Sales channel: ${order.salesChannel === "offline" ? "Offline counter" : "Online"}`, `Order number: ${order.orderNumber}`,
     `Order date: ${new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} (India time)`,
     `Customer: ${order.customerName}`, `Phone: ${order.phone}`,
     `Shipping address:\n${order.address}`,

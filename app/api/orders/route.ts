@@ -154,7 +154,8 @@ export async function POST(request: Request) {
 
     const order: OrderRecord = { id: orderRow.id, orderNumber, customerName: payload.customerName.trim(), phone: payload.phone.trim(), address: payload.address.trim(), subtotal: payload.subtotal, status: "submitted", storageMode: "supabase", createdAt: orderRow.created_at, items: completedItems };
     return Response.json({ order }, { headers: { "Cache-Control": "private, no-store" } });
-  } catch {
+  } catch (failure) {
+    if (failure && typeof failure === "object" && "message" in failure && String(failure.message).includes("Insufficient stock")) return Response.json({ error: "Insufficient stock. Refresh products and reduce the quantity before ordering." }, { status: 409 });
     return Response.json({ error: "The order could not be saved. Retry this checkout or contact Inkivo if the problem continues." }, { status: 500 });
   }
 }

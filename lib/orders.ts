@@ -15,6 +15,7 @@ export type OrderItemRecord = { productId: string; productName: string; quantity
 export type OrderRecord = {
   id: string; orderNumber: string; customerName: string; phone: string; address: string; subtotal: number;
   status: "submitted" | "local"; storageMode: "supabase" | "local"; createdAt: string; items: OrderItemRecord[];
+  salesChannel?: "online" | "offline";
   completedAt?: string; deletedAt?: string; purgeStarted?: boolean;
 };
 
@@ -29,7 +30,7 @@ const SUPABASE_NOT_CONFIGURED = "Supabase order storage is not configured.";
 const savedOrderSchema = z.object({
   id: z.string().min(1), orderNumber: z.string().min(1), customerName: z.string(), phone: z.string(), address: z.string(),
   subtotal: z.number().finite().nonnegative(), status: z.enum(["submitted", "local"]), storageMode: z.enum(["supabase", "local"]),
-  createdAt: z.string().datetime({ offset: true }),
+  createdAt: z.string().datetime({ offset: true }), salesChannel: z.enum(["online", "offline"]).optional(),
   completedAt: z.string().datetime({ offset: true }).optional(), deletedAt: z.string().datetime({ offset: true }).optional(), purgeStarted: z.boolean().optional(),
   items: z.array(z.object({
     productId: z.string().min(1), productName: z.string(), quantity: z.number().int().min(1).max(99), unitPrice: z.number().finite().nonnegative(),

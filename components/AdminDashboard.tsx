@@ -10,6 +10,8 @@ import { createDefaultTemplate, loadTemplate, loadLocalCustomerTemplate, subscri
 import { filterProducts, loadAllProducts, loadLocalProducts, saveCustomProduct, slugifyProductName, subscribeToProductCatalog } from "@/lib/productCatalog";
 import { formatPrice, products, type Product } from "@/lib/products";
 import { AdminNav } from "./AdminNav";
+import { AdminInventory } from "./AdminInventory";
+import { AdminSalesReports } from "./AdminSalesReports";
 import { AdminOrders } from "./AdminOrders";
 import { useDialog } from "@/lib/useDialog";
 import { contact } from "@/lib/siteConfig";
@@ -146,7 +148,7 @@ export function AdminDashboard() {
               {visibleProducts.map((product) => {
                 const template = templates[product.id] ?? createDefaultTemplate(product);
                 return <div className="table-row" key={product.id}>
-                  <div className="admin-product-name"><span><Image src={product.image} alt="" width={54} height={70} unoptimized={product.image.startsWith("data:")} /></span><div><strong>{product.name}</strong><small>{product.finish}</small><small className="product-merchandising">Position {catalogue.findIndex((item) => item.id === product.id) + 1} · {product.badge || "No badge"}</small></div></div>
+                  <div className="admin-product-name"><span><Image src={product.image} alt="" width={54} height={70} unoptimized={product.image.startsWith("data:")} /></span><div><strong>{product.name}</strong><small>{product.finish}</small><small className="product-merchandising">{product.stockQuantity == null ? "Stock not tracked" : `${product.stockQuantity} in stock`} · Position {catalogue.findIndex((item) => item.id === product.id) + 1} · {product.badge || "No badge"}</small></div></div>
                   <div><span className="surface-chip">{template.area.surface.replace("-", " ")}</span><small>{template.area.widthMm} × {template.area.heightMm} mm</small></div>
                   <div><span className={`status-chip ${template.status}`}>{template.status === "published" ? <CheckCircle2 size={12} /> : <Clock3 size={12} />}{template.status}</span><small>Version {template.version}</small></div>
                   <strong>{formatPrice(product.price)}</strong>
@@ -156,8 +158,10 @@ export function AdminDashboard() {
               {visibleProducts.length === 0 && <div className="admin-table-empty"><Search size={24} /><strong>No products found</strong><span>Try a different name, category, or finish.</span><button onClick={() => setSearchQuery("")}>Show all products</button></div>}
             </div>
           </section>
+          <AdminInventory products={catalogue} />
           <AdminOrders onCount={setOrderCount} />
-          <section className="admin-card settings-card" id="settings"><div className="admin-card-head"><div><h2>Workspace settings</h2></div></div><div className="settings-content"><p><strong>Storage:</strong> {cloud ? "Shared Supabase catalogue and private order files." : "Development-only storage on this device."}</p><p><strong>Artwork:</strong> review supplied originals and selected-side previews before printing.</p><p><a href={contact.telephone}>{contact.phone}</a> · <a href={contact.emailLink}>{contact.email}</a></p></div></section>
+          <AdminSalesReports />
+          <section className="admin-card settings-card" id="settings"><div className="admin-card-head"><div><h2>Workspace settings</h2></div></div><div className="settings-content"><p><strong>Storage:</strong> {cloud ? "Shared Supabase catalogue and private order files." : "Development-only storage on this device."}</p><p><strong>Online checkout:</strong> WhatsApp remains active. Razorpay is awaiting approval.</p><p><strong>Artwork:</strong> review supplied originals and selected-side previews before printing.</p><p><a href={contact.telephone}>{contact.phone}</a> · <a href={contact.emailLink}>{contact.email}</a></p></div></section>
         </div>
       </section>
       {addOpen && <div ref={modalRef} className="product-modal" role="dialog" aria-modal="true" aria-labelledby="add-product-title">

@@ -23,6 +23,7 @@ export function isProjectAssetUrl(value: string) {
 const productSchema = z.object({
   id: z.string().min(1), slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/), name: z.string().min(1),
   shortName: z.string(), category: z.string().min(1), price: z.number().finite().nonnegative(),
+  stockQuantity: z.number().int().min(0).max(1000000).nullable().optional(),
   compareAt: z.number().finite().positive().optional(), image: imagePath,
   views: z.array(z.object({ id: z.enum(["front", "back"]), label: z.string(), image: imagePath })).optional(),
   finish: z.string(), badge: z.string().optional(), displayOrder: z.number().int().min(1).max(10000).optional(), description: z.string(),

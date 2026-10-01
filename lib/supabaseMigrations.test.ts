@@ -29,7 +29,7 @@ beforeAll(async () => {
     alter table storage.objects enable row level security;
     create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:cardinality(string_to_array(name, '/'))-1] $$;
   `);
-  for (const name of ["202609290001_initial_schema.sql", "202609300001_admin_profile_access.sql", "202609300002_order_management.sql", "202609300003_shared_catalogue.sql", "202609300004_order_safety.sql"]) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
+  for (const name of ["202609290001_initial_schema.sql", "202609300001_admin_profile_access.sql", "202609300002_order_management.sql", "202609300003_shared_catalogue.sql", "202609300004_order_safety.sql", "202610010001_stock_counter.sql"]) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
   await db.query("insert into auth.users(id) values($1),($2)", [adminId, customerId]);
   await db.query("update public.profiles set role='admin' where id=$1", [adminId]);
   await role("authenticated", adminId);
@@ -87,5 +87,54 @@ describe("actual migration SQL and permission boundaries", () => {
     await db.exec("reset role");
     await db.exec("update public.order_submission_limits set window_started = now() - interval '11 minutes'");
     await role("service_role"); expect((await db.query("select public.consume_order_attempt('fixture') as allowed")).rows).toEqual([{ allowed: true }]);
+  });
+});
+
+describe("inventory and transactional offline sales", () => {
+  const product = products[0];
+  const body = (key: string, quantity = 1) => ({ idempotencyKey: key, customerName: "Counter customer", phone: "", address: "Counter", items: [{ slug: product.slug, quantity, unitPrice: product.price }] });
+  const stock = async () => (await db.query<{ quantity: number }>("select (storefront_config->>'stockQuantity')::integer as quantity from public.products where slug=$1", [product.slug])).rows[0].quantity;
+  it("deducts a counter sale exactly once and preserves stock on catalogue edits", async () => {
+    await role("authenticated", adminId);
+    await db.query("select public.set_product_stock($1, 5, null)", [product.slug]);
+    const document = body("stock-counter-one", 2);
+    const first = await db.query<{ id: string }>("select public.submit_counter_order($1::jsonb) as id", [JSON.stringify(document)]);
+    expect(await stock()).toBe(3);
+    const retry = await db.query<{ id: string }>("select public.submit_counter_order($1::jsonb) as id", [JSON.stringify(document)]);
+    expect(retry.rows).toEqual(first.rows); expect(await stock()).toBe(3);
+    await db.query("select public.save_storefront_product($1::jsonb)", [JSON.stringify({ ...product, stockQuantity: 99, displayOrder: 1 })]);
+    expect(await stock()).toBe(3);
+    await db.query("update public.orders set state='completed', completed_at=now(), deleted_at=now() where id=$1", [first.rows[0].id]);
+    await db.query("delete from public.orders where id=$1", [first.rows[0].id]);
+    expect(await stock()).toBe(3);
+  });
+  it("rejects overselling and rolls back the entire multi-product order", async () => {
+    await role("authenticated", adminId);
+    await expect(db.query("select public.submit_counter_order($1::jsonb)", [JSON.stringify(body("stock-counter-over", 4))])).rejects.toThrow("Insufficient stock");
+    expect(await stock()).toBe(3);
+    expect((await db.query("select id from public.orders where idempotency_key='counter-stock-counter-over'")).rows).toEqual([]);
+  });
+  it("rejects stale inventory writes and changed retry payloads", async () => {
+    await role("authenticated", adminId);
+    await expect(db.query("select public.set_product_stock($1, 10, 5)", [product.slug])).rejects.toThrow("Stock changed");
+    await db.query("select public.submit_counter_order($1::jsonb)", [JSON.stringify(body("stock-counter-retry"))]);
+    await expect(db.query("select public.submit_counter_order($1::jsonb)", [JSON.stringify(body("stock-counter-retry", 2))])).rejects.toThrow("submission changed");
+    expect(await stock()).toBe(2);
+  });
+  it("deducts online stock on final submission, aggregates duplicate size lines, and skips reopen", async () => {
+    await role("authenticated", adminId);
+    const row = await db.query<{ id: string }>("insert into public.orders(order_number,customer_name,phone,shipping_address,state,idempotency_key) values('ONLINE-STOCK','Customer','','{}','uploading','online-stock') returning id");
+    const id = row.rows[0].id;
+    await db.query("insert into public.order_items(order_id,product_id,product_name_snapshot,unit_price,quantity,line_total) select $1,id,name,1,1,1 from public.products where slug=$2", [id,product.slug]);
+    expect(await stock()).toBe(2);
+    await db.query("update public.orders set state='submitted' where id=$1", [id]); expect(await stock()).toBe(1);
+    await db.query("update public.orders set state='completed' where id=$1", [id]);
+    await db.query("update public.orders set state='submitted' where id=$1", [id]); expect(await stock()).toBe(1);
+  });
+  it("denies stock and counter functions to customers and anonymous visitors", async () => {
+    await role("authenticated", customerId);
+    await expect(db.query("select public.set_product_stock($1, 9, 1)",[product.slug])).rejects.toThrow("Administrator access required");
+    await expect(db.query("select public.submit_counter_order($1::jsonb)",[JSON.stringify(body("forbidden"))])).rejects.toThrow("Administrator access required");
+    await role("anon"); await expect(db.query("select public.set_product_stock($1, 9, 1)",[product.slug])).rejects.toThrow("permission denied");
   });
 });

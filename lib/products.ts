@@ -6,6 +6,7 @@ export type Product = {
   category: string;
   price: number;
   compareAt?: number;
+  stockQuantity?: number | null;
   image: string;
   views?: Array<{ id: "front" | "back"; label: string; image: string }>;
   finish: string;

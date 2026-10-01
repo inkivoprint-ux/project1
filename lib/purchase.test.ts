@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPurchaseEntry, normalizePurchaseQuantity } from "./purchase";
+import { createProductPurchaseEntries, createPurchaseEntry, normalizePurchaseQuantity } from "./purchase";
 import { products } from "./products";
 import { parseOrderPayload } from "./orderSubmission";
 import { buildWhatsAppOrderMessage, type OrderRecord } from "./orders";
@@ -40,4 +40,9 @@ describe("single-product purchases", () => {
     expect(message).not.toContain("Files are saved");
     expect(message).not.toContain("cropped:");
   });
+});
+
+it("prevents purchases above tracked product stock", () => {
+  expect(() => createProductPurchaseEntries({ id: "bottle", category: "Bottles", stockQuantity: 0 }, 1)).toThrow("in stock");
+  expect(() => createProductPurchaseEntries({ id: "bottle", category: "Bottles", stockQuantity: 2 }, 3)).toThrow("Only 2");
 });

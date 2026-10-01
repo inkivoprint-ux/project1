@@ -61,7 +61,7 @@ export function ProductDetail({ product }: { product: Product }) {
       </section>
       <section className="product-detail-copy" aria-label="Product details">
         <span className="eyebrow">{product.category}</span><h1>{product.name}</h1><p className="product-detail-finish">{product.finish}</p>
-        <div className="product-detail-price"><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}<small>per item</small></div>
+        <p className="product-stock-status">{product.stockQuantity == null ? "" : product.stockQuantity === 0 ? "Out of stock" : `${product.stockQuantity} units in stock`}</p><div className="product-detail-price"><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}<small>per item</small></div>
         <div className="product-description"><h2>About this product</h2><p>{product.description || "Contact the Inkivo team for more information about this product."}</p></div>
         <dl className="product-detail-specs"><div><dt>Finish / specification</dt><dd>{product.finish}</dd></div><div><dt>Personalisation area</dt><dd>{product.printArea.widthMm} × {product.printArea.heightMm} mm</dd></div>{product.views && <div><dt>Available previews</dt><dd>{product.views.map((item) => item.label).join(" / ")}</dd></div>}</dl>
         <fieldset className="purchase-options"><legend>Make it yours</legend>

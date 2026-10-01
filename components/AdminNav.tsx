@@ -13,6 +13,9 @@ const items = [
   { label: "Products", href: "/admin#products", icon: PackageOpen },
   { label: "Templates", href: "/admin#templates", icon: Layers3 },
   { label: "Orders", href: "/admin#orders", icon: ShoppingBag },
+  { label: "Stock", href: "/admin#inventory", icon: PackageOpen },
+  { label: "Counter", href: "/admin/counter", icon: ShoppingBag },
+  { label: "Reports", href: "/admin#reports", icon: CircleGauge },
   { label: "Settings", href: "/admin#settings", icon: Settings },
 ];
 

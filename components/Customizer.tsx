@@ -405,7 +405,7 @@ export function Customizer({ product }: { product: Product }) {
 
         <aside className="customizer-panel">
           <fieldset className="customizer-purchase-fields" disabled={savingToCart}>
-          <div className="customizer-product-info"><p>{product.category}</p><h1>{product.name}</h1><span>{product.finish}</span><div><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}</div></div>
+          <div className="customizer-product-info"><p>{product.category}</p><h1>{product.name}</h1><span>{product.finish}{product.stockQuantity == null ? "" : ` · ${product.stockQuantity} in stock`}</span><div><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}</div></div>
           {product.views && <div className="view-switch customer-view-switch" aria-label="Product side">{product.views.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => changeView(item.id)}>{item.label}</button>)}</div>}
           {product.views && <p className="side-save-note">Order files capture the selected {productView.label.toLowerCase()} side. A combined front-and-back print file is not generated.</p>}
           <div className="tool-tabs">
