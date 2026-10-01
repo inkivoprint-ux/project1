@@ -89,7 +89,7 @@ export function CartDrawer({ open, cart, products, onClose, onQuantity, onRemove
             </div>
           </article>)}
         </div>
-        <footer><div><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></div><OrderSupport />
+        <footer><div className="cart-subtotal"><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></div><OrderSupport />
           {error && <p className="cart-error" role="alert"><CircleAlert /> {error}</p>}
           {checkoutOpen ? <form className="cart-checkout-fields" onSubmit={submitOrder} aria-busy={submitting}>
             <label><span>Name</span><input required maxLength={160} value={customerName} onChange={(event) => setCustomerName(event.target.value)} autoComplete="name" /></label>

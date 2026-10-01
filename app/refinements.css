@@ -81,7 +81,7 @@ section[id] { scroll-margin-top: 100px; }
 .cart-line-actions > div { height: 40px; grid-template-columns: 40px 32px 40px; }
 .cart-line-actions > div span, .cart-line-actions > button { font-size: 12px; }
 .cart-line-actions > button { min-height: 40px; }
-.cart-drawer > footer > div span, .cart-drawer > footer > button, .cart-checkout-fields label > span { font-size: 14px; }
+.cart-drawer > footer > .cart-subtotal span, .cart-drawer > footer > button, .cart-checkout-fields label > span { font-size: 14px; }
 .cart-checkout-fields { gap: 14px; }
 .cart-checkout-fields input, .cart-checkout-fields textarea { font-size: 16px; min-height: 44px; border-radius: 6px; }
 .cart-checkout-fields > button, .cart-drawer > footer > .cart-whatsapp-button { font-size: 14px; border-radius: 7px; }
@@ -474,3 +474,24 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--sans); letter-spacing: -.02em; }
 .order-support a { text-decoration: underline; overflow-wrap: anywhere; }
 .checkout-receipt { padding: 24px; overflow-y: auto; }
 .checkout-receipt .button { margin: 16px 0; }
+
+/* Delivery help is a text panel, separate from the price summary. */
+.cart-drawer > footer > .order-support {
+  display: block;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f5f8f6;
+  color: #334c43;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.cart-drawer .order-support p { margin: 0 0 12px; }
+.cart-drawer .order-support p:last-child { margin-bottom: 0; }
+.cart-drawer .order-support strong { font-family: inherit; font-size: inherit; font-weight: 700; color: var(--green); }
+.cart-drawer .order-support a { display: inline; font-size: inherit; color: var(--green); overflow-wrap: anywhere; }
+.cart-drawer > header { position: sticky; top: 0; z-index: 1; }
+.cart-drawer > footer { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+.cart-line-copy { min-width: 0; }
+.cart-line-copy h3 { overflow-wrap: anywhere; line-height: 1.35; }
