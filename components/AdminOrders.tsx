@@ -74,6 +74,11 @@ function OrderManagementControls({ order, onChanged }: { order: OrderRecord; onC
 }
 
 function OrderAssetTile({ order, itemIndex, asset, onDeleted }: { order: OrderRecord; itemIndex: number; asset: OrderAsset; onDeleted: () => void }) {
+  const isShirt = Boolean(order.items[itemIndex]?.size) || /t[\s-]?shirt/i.test(order.items[itemIndex]?.productName ?? "");
+  const isBack = asset.slot !== undefined
+    ? asset.kind === "original" ? [2, 3, 5].includes(asset.slot) : asset.slot === 1
+    : /(?:^|-)back(?:-|\.)/i.test(asset.fileName);
+  const sideLabel = isShirt ? `${isBack ? "Back side" : "Front"} · ` : "";
   const [url, setUrl] = useState<string>();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -107,7 +112,7 @@ function OrderAssetTile({ order, itemIndex, asset, onDeleted }: { order: OrderRe
   };
   return <div className="order-asset-tile">
     <div>{url && asset.mimeType !== "application/postscript" ? <Image src={url} alt={`${asset.kind} order file`} width={70} height={70} unoptimized onError={() => setError("This order file could not be opened. Refresh orders or check the administrator session.")} /> : <FileImage />}</div>
-    <span>{asset.mimeType === "application/postscript" ? "Text artwork · EPS vector" : asset.kind === "edited" ? "Composite reference" : asset.kind === "original" ? "Original upload" : "Product preview"}</span>
+    <span>{sideLabel}{asset.mimeType === "application/postscript" ? "Text artwork · EPS vector" : asset.kind === "edited" ? "Composite reference" : asset.kind === "original" ? "Original upload" : "Product preview"}</span>
     <small title={asset.fileName}>{asset.fileName}</small>
     <div className="order-asset-actions">{url && <a href={url} download={asset.fileName}><Download /> Download</a>}<button type="button" onClick={remove} disabled={deleting || Boolean(order.deletedAt)} title={order.deletedAt ? "Restore the order before deleting an individual file" : undefined}>{deleting ? <LoaderCircle className="spin" /> : <Trash2 />} Delete file</button></div>
     {error && <p className="order-asset-error" title={error} role="alert"><CircleAlert /> {error}</p>}
