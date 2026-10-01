@@ -404,3 +404,26 @@ section[id] { scroll-margin-top: 100px; }
 }
 
 .font-options .malayalam-font-sample { display: block; font-size: 22px; line-height: 1.6; font-weight: 400; margin-bottom: 4px; }
+
+/* Keep the live product visible while mobile editing controls scroll below it. */
+@media (max-width: 950px) {
+  .customizer-layout { display: block; }
+  .customizer-stage-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    height: clamp(180px, 42svh, 380px);
+    padding: 8px 12px 10px;
+    background: #f5f2eb;
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 6px 18px rgba(0, 40, 30, .1);
+  }
+  .customizer-stage-head { flex: none; margin-bottom: 6px; padding: 0; gap: 8px; }
+  .customizer-stage-head > span { max-width: 55%; font-size: 10px; }
+  .customizer-stage-head button { min-height: 40px; padding-inline: 8px; font-size: 10px; }
+  .customizer-stage { flex: 1; height: auto; min-height: 0; border-radius: 10px; }
+  .customizer-stage-wrap .live-preview-status { display: none; }
+  .customizer-panel { border-left: 0; max-height: none; overflow: visible; }
+  .customizer-panel input, .customizer-panel textarea { scroll-margin-top: clamp(180px, 42svh, 380px); }
+  .customizer-panel .text-field input { font-size: 16px; }
+}
