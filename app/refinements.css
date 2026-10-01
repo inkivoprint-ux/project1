@@ -438,6 +438,32 @@ section[id] { scroll-margin-top: 100px; }
 }
 
 /* Consistent upright sans-serif typography throughout the website interface. */
+/* Admin editing keeps the same live-preview arrangement as customer editing. */
+@media (max-width: 760px) {
+  .template-workspace { align-items: stretch; }
+  .template-controls { position: static; height: auto; min-height: 0; }
+  .editor-control-scroll { overflow: visible; }
+  .template-preview-panel {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex: none;
+    height: clamp(250px, 46svh, 440px);
+    min-height: 0;
+    overflow: hidden;
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 6px 18px rgba(0, 40, 30, .1);
+  }
+  .template-preview-panel .preview-toolbar { height: auto; min-height: 44px; padding: 4px 8px; gap: 4px; flex-wrap: wrap; }
+  .template-preview-panel .preview-toolbar button { min-height: 36px; padding-inline: 6px; font-size: 10px; }
+  .template-preview-panel .template-stage-frame { flex: 1; height: auto; min-height: 0; padding: 6px; overflow: hidden; }
+  .template-preview-panel .template-stage { max-height: none; min-height: 0; }
+  .template-preview-panel .template-product-image { padding: 6px; }
+  .template-preview-panel .template-preview-foot { flex: none; min-height: 44px; padding: 3px 8px; gap: 6px; flex-wrap: nowrap; }
+  .template-preview-panel .template-preview-foot > div { display: none; }
+  .template-preview-panel .template-preview-foot button { flex: 1; min-width: 0; min-height: 38px; height: auto; padding: 4px; font-size: 10px; }
+  .template-controls input, .template-controls select, .template-controls button { scroll-margin-top: clamp(250px, 46svh, 440px); }
+}
 body, button, input, textarea, select { font-style: normal; }
 em, i, address { font-style: normal; }
 h1, h2, h3, h4, h5, h6 { font-family: var(--sans); letter-spacing: -.02em; }
