@@ -27,3 +27,9 @@ Online checkout remains WhatsApp. Razorpay is awaiting the owner's approval noti
 ## Verification
 
 Automated PostgreSQL tests cover stock deduction, no double deduction, rejected overselling, stale stock updates, stock preservation on catalogue edits, deletion without restoring stock, and admin-only functions. CSV tests cover India date boundaries, invalid dates, UTF-8, and formula escaping. Do not create production test sales without accounting for their inventory and reporting effects.
+
+## Customer delivery and payment support
+Product details and checkout show free shipping/courier and expected delivery in 3–4 working days after confirmation. Customers can contact +91 9744488876 on WhatsApp or inkivoprint@gmail.com / graphyflex@gmail.com with their order number, name and address, including deliveries missing after 5 days.
+Checkout shows the saved server order number before the WhatsApp handoff and asks customers to screenshot or retain it. Local development orders are labelled prepared only. No paid-order claim is made.
+PaymentSupport includes cancelled and processing messages for future Razorpay integration. These are not connected to a payment callback yet: Razorpay remains inactive until approval is explicitly confirmed. A future successful-payment receipt must use the server order_number only after verified payment, never a browser-only success callback.
+

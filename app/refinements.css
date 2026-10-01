@@ -469,3 +469,8 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--sans); letter-spacing: -.02em; }
 .report-table { overflow-x: auto; margin-block: 16px; }.report-table table { width: 100%; border-collapse: collapse; }.report-table th, .report-table td { text-align: left; padding: 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .sales-panel .report-delete { background: #a34032; }
 @media (max-width: 900px) { .admin-nav nav { grid-template-columns: repeat(8, 1fr); gap: 0; }.admin-nav nav a { padding-inline: 3px; }.sales-panel { padding: 18px; } }
+
+.order-support { font-size: 14px; line-height: 1.6; color: var(--muted, #52645f); }
+.order-support a { text-decoration: underline; overflow-wrap: anywhere; }
+.checkout-receipt { padding: 24px; overflow-y: auto; }
+.checkout-receipt .button { margin: 16px 0; }

@@ -18,6 +18,7 @@ import { CartDrawer } from "./CartDrawer";
 import { QuantitySelector } from "./QuantitySelector";
 import { hasSupabaseConfiguration } from "@/lib/supabase/config";
 import { refreshSharedProducts } from "@/lib/sharedCatalog";
+import { OrderSupport } from "./OrderSupport";
 
 export function ProductDetail({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1);
@@ -77,7 +78,8 @@ export function ProductDetail({ product }: { product: Product }) {
           <button className="button purchase-secondary" disabled={!selectedQuantity} onClick={addToCart}><ShoppingBag size={18} /> {personalised ? "Personalise & add to cart" : "Add to cart"}</button>
           <button className="button" disabled={!selectedQuantity} onClick={() => setBuyNow(createProductPurchaseEntries(product, quantity, sizeQuantities))}>{personalised ? "Personalise & buy now" : "Buy now"} <ArrowRight size={18} /></button>
         </>}</div>
-        <p className="purchase-note">{personalised ? "Create and preview your design first. Your selected quantity carries into the editor." : "Buy now checks out only this product; your shopping cart is not changed."} Shipping and final order details are confirmed on WhatsApp.</p>
+        <p className="purchase-note">{personalised ? "Create and preview your design first. Your selected quantity carries into the editor." : "Buy now checks out only this product; your shopping cart is not changed."} Final order details are confirmed on WhatsApp.</p>
+        <OrderSupport />
         {error && <p className="purchase-error" role="alert">{error}</p>}
         <Link href="/#contact" className="text-link">Questions about this product? Talk to us <ArrowRight size={16} /></Link>
       </section>
