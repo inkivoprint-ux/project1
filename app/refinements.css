@@ -110,8 +110,6 @@ section[id] { scroll-margin-top: 100px; }
 .admin-product-name { min-width: 0; }
 .admin-product-name strong { font-size: 21px; line-height: 1.2; }
 .product-row-actions button, .product-row-actions a { min-height: 40px; border: 0; background: transparent; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--green); cursor: pointer; }
-.settings-content { padding: 24px; font-size: 14px; color: var(--muted); }
-.settings-content strong, .settings-content a { color: var(--green); }
 .admin-order-head { align-items: flex-start; flex-wrap: wrap; }
 .admin-order-head strong { font-size: 16px; }
 .admin-order-head small, .order-storage, .admin-order-head > div:first-child > span { font-size: 12px; overflow-wrap: anywhere; }
@@ -546,4 +544,4 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--sans); letter-spacing: -.02em; }
 .stock-medium { color: #947000; font-weight: 700; }
 .stock-high { color: #15803d; font-weight: 700; }
 
-@media (max-width: 950px) { .admin-nav nav { grid-template-columns: repeat(9, minmax(0, 1fr)); } }
+@media (max-width: 950px) { .admin-nav nav { grid-template-columns: repeat(8, minmax(0, 1fr)); } }

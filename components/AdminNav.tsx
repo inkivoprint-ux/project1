@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, CircleGauge, Layers3, PackageOpen, Settings, ShoppingBag } from "lucide-react";
+import { ChevronLeft, CircleGauge, Layers3, PackageOpen, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -17,7 +17,6 @@ const items = [
   { label: "Stock", href: "/admin#inventory", icon: PackageOpen },
   { label: "Counter", href: "/admin/counter", icon: ShoppingBag },
   { label: "Reports", href: "/admin#reports", icon: CircleGauge },
-  { label: "Settings", href: "/admin#settings", icon: Settings },
 ];
 
 export function AdminNav() {

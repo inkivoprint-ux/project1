@@ -15,7 +15,6 @@ import { AdminInventory } from "./AdminInventory";
 import { AdminSalesReports } from "./AdminSalesReports";
 import { AdminOrders } from "./AdminOrders";
 import { useDialog } from "@/lib/useDialog";
-import { contact } from "@/lib/siteConfig";
 import { hasSupabaseConfiguration } from "@/lib/supabase/config";
 import { refreshSharedProducts, refreshSharedTemplate, saveSharedProduct, saveSharedTemplate } from "@/lib/sharedCatalog";
 
@@ -158,7 +157,6 @@ export function AdminDashboard() {
           <AdminInventory products={catalogue} />
           <AdminOrders onCount={setOrderCount} /><AdminOrders channel="offline" />
           <AdminSalesReports />
-          <section className="admin-card settings-card" id="settings"><div className="admin-card-head"><div><h2>Workspace settings</h2></div></div><div className="settings-content"><p><strong>Storage:</strong> {cloud ? "Shared Supabase catalogue and private order files." : "Development-only storage on this device."}</p><p><strong>Online checkout:</strong> WhatsApp remains active. Razorpay is awaiting approval.</p><p><strong>Artwork:</strong> review supplied originals and selected-side previews before printing.</p><p><a href={contact.telephone}>{contact.phone}</a> · <a href={contact.emailLink}>{contact.email}</a></p></div></section>
         </div>
       </section>
       {addOpen && <div ref={modalRef} className="product-modal" role="dialog" aria-modal="true" aria-labelledby="add-product-title">
