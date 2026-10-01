@@ -43,7 +43,8 @@ export function ProductDetail({ product }: { product: Product }) {
     return () => { window.clearTimeout(timer); unsubscribeCart(); unsubscribeProducts(); };
   }, []);
 
-  const views = [...(product.views ?? [{ id: "front" as const, label: "Front", image: product.image }]), ...(isTShirt && !product.views?.some((entry) => entry.id === "back") ? [{ id: "back" as const, label: "Back (reference preview)", image: "/products/tshirt-back.png" }] : [])];
+  const frontImage = product.views?.find((entry) => entry.id === "front")?.image ?? product.image;
+  const views = [...(product.views ?? [{ id: "front" as const, label: "Front", image: product.image }]), ...(isTShirt && !product.views?.some((entry) => entry.id === "back") ? [{ id: "back" as const, label: "Back", image: frontImage }] : [])].map((entry) => isTShirt && entry.id === "back" ? { ...entry, label: "Back", image: frontImage } : entry);
   const image = views.find((item) => item.id === view)?.image ?? product.image;
   const customizerUrl = `/customize/${product.slug}?quantity=${selectedQuantity}&personalise=1&view=${view}${isTShirt ? `&sizes=${encodeURIComponent(serializeSizeQuantities(sizeQuantities))}` : ""}`;
   function addToCart() {

@@ -183,7 +183,8 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
   useEffect(() => { photoUrlsRef.current = Array.from(new Set([...photoUrlsRef.current, ...photos.flatMap((entry) => entry.url ? [entry.url] : [])])); }, [photos]);
   useEffect(() => () => { photoUrlsRef.current.forEach((url) => URL.revokeObjectURL(url)); }, []);
   const area = view === "back" ? template.backArea ?? template.area : template.area;
-  const productViews = [...(product.views ?? [{ id: "front" as const, label: "Front", image: product.image }]), ...(isTShirt && !product.views?.some((entry) => entry.id === "back") ? [{ id: "back" as const, label: "Back (reference preview)", image: "/products/tshirt-back.png" }] : [])];
+  const frontImage = product.views?.find((entry) => entry.id === "front")?.image ?? product.image;
+  const productViews = [...(product.views ?? [{ id: "front" as const, label: "Front", image: product.image }]), ...(isTShirt && !product.views?.some((entry) => entry.id === "back") ? [{ id: "back" as const, label: "Back", image: frontImage }] : [])].map((entry) => isTShirt && entry.id === "back" ? { ...entry, label: "Back", image: frontImage } : entry);
   const productView = productViews.find((item) => item.id === view)!;
   const mockupSrc = template.mockupImages?.[view] ?? productView.image;
   const surfaceMap = area.surfaceMap;
