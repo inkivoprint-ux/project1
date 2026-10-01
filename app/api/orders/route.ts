@@ -85,9 +85,7 @@ export async function POST(request: Request) {
       } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Refresh the product before ordering." }, { status: 400 }); }
       validatedProducts.push(found.data!);
     }
-    const orderNumber = `INK-${Date.now().toString().slice(-8)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
     const { data: orderRow, error: orderError } = await supabase.from("orders").insert({
-      order_number: orderNumber,
       customer_name: payload.customerName.trim(),
       phone: payload.phone.trim(),
       whatsapp: payload.phone.trim(),
@@ -97,9 +95,10 @@ export async function POST(request: Request) {
       total: payload.subtotal,
       idempotency_key: idempotencyKey,
       request_hash: requestHash,
-    }).select("id, created_at").single();
+    }).select("id, created_at, order_number").single();
     if (orderError?.code === "23505") return Response.json({ error: "This checkout is already processing. Wait briefly and retry the same checkout." }, { status: 409 });
     if (orderError || !orderRow) throw orderError ?? new Error("Order could not be created.");
+    const orderNumber = orderRow.order_number;
 
     const completedItems: OrderItemRecord[] = [];
     const uploadedPaths: string[] = [];

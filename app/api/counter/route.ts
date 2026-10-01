@@ -16,6 +16,8 @@ export async function POST(request: Request) {
     }
     const result = await session.client.rpc("submit_counter_order", { document: input });
     if (result.error) return Response.json({ error: /Insufficient stock|price changed/.test(result.error.message) ? result.error.message : "Counter order could not be saved. Check the stock/counter migration and refresh products." }, { status: 409 });
-    return Response.json({ orderId: result.data }, { headers: { "Cache-Control": "private, no-store" } });
+    const saved = await session.client.from("orders").select("order_number").eq("id", result.data).single();
+    // The sale is already committed; do not encourage a second submission on a read failure.
+    return Response.json({ orderId: result.data, orderNumber: saved.data?.order_number ?? result.data }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Invalid counter order." }, { status: 400 }); }
 }

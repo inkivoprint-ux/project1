@@ -29,7 +29,7 @@ beforeAll(async () => {
     alter table storage.objects enable row level security;
     create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:cardinality(string_to_array(name, '/'))-1] $$;
   `);
-  for (const name of ["202609290001_initial_schema.sql", "202609300001_admin_profile_access.sql", "202609300002_order_management.sql", "202609300003_shared_catalogue.sql", "202609300004_order_safety.sql", "202610010001_stock_counter.sql", "202610010002_size_stock.sql"]) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
+  for (const name of ["202609290001_initial_schema.sql", "202609300001_admin_profile_access.sql", "202609300002_order_management.sql", "202609300003_shared_catalogue.sql", "202609300004_order_safety.sql", "202610010001_stock_counter.sql", "202610010002_size_stock.sql", "202610010003_order_numbers.sql"]) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
   await db.query("insert into auth.users(id) values($1),($2)", [adminId, customerId]);
   await db.query("update public.profiles set role='admin' where id=$1", [adminId]);
   await role("authenticated", adminId);
@@ -37,6 +37,20 @@ beforeAll(async () => {
 }, 30_000);
 afterEach(async () => { await db.exec("reset role"); });
 afterAll(async () => { await db?.close(); });
+
+it("keeps independent lifetime order sequences across Indian dates and beyond 99", async () => {
+  await db.exec("reset role; begin; delete from public.order_number_counters");
+  try {
+    const insert = async (channel: string, date: string) => (await db.query<{ order_number: string }>("insert into public.orders(customer_name,phone,shipping_address,created_at,idempotency_key) values('Number test','',jsonb_build_object('salesChannel',$1::text),$2::timestamptz,gen_random_uuid()::text) returning order_number", [channel, date])).rows[0].order_number;
+    expect(await insert("online", "2030-09-01T18:29:00Z")).toBe("INK -01/09/2030 -01");
+    expect(await insert("online", "2030-09-01T18:30:00Z")).toBe("INK -02/09/2030 -02");
+    expect(await insert("offline", "2030-09-01T18:30:00Z")).toBe("INKOFF -02/09/2030 -01");
+    await db.exec("update public.order_number_counters set last_number=99 where channel='online'");
+    expect(await insert("online", "2030-09-03T00:00:00Z")).toBe("INK -03/09/2030 -100");
+    await role("anon");
+    await expect(db.query("select * from public.order_number_counters")).rejects.toThrow("permission denied");
+  } finally { await db.exec("rollback; reset role"); }
+});
 
 describe("actual migration SQL and permission boundaries", () => {
   it("applies every migration and enables RLS on the new tables", async () => {
@@ -158,3 +172,5 @@ it("deducts exact size stock, preserves other sizes, and rolls back unavailable 
   expect((await config()).sizeStock.XS).toBe(1);
   await expect(db.query("select public.set_product_size_stock($1,$2::jsonb,$3::jsonb,24)", [shirt.slug, JSON.stringify(counts), JSON.stringify(counts)])).rejects.toThrow("Stock changed");
 });
+
+

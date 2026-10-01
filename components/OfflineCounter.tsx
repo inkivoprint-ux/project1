@@ -38,7 +38,7 @@ export function OfflineCounter() {
         const response = await fetch("/api/counter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...content, idempotencyKey: keys.current.get(signature) }) });
         const result = await response.json(); if (!response.ok) throw new Error(result.error);
         keys.current.clear(); setLines([{ slug: "", quantity: 1, size: "" }]); setCustomerName("Walk-in customer"); setPhone(""); setAddress("");
-        showSuccess("Offline order submitted successfully. Stock updated.");
+        showSuccess(`Offline order ${result.orderNumber} saved successfully. Stock updated.`);
         try { setProducts(await refreshSharedProducts()); } catch { setError("Order saved successfully. Refresh the counter to load updated stock."); }
       } catch (failure) { setError(failure instanceof Error ? failure.message : "Counter submission failed."); }
       finally { setBusy(false); }
