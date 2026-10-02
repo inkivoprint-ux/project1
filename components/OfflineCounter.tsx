@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AdminNav } from "./AdminNav";
 import { refreshSharedProducts } from "@/lib/sharedCatalog";
+import { printPrice } from "@/lib/printPricing";
 import { formatPrice, type Product } from "@/lib/products";
 import { isTShirtCategory, T_SHIRT_SIZES } from "@/lib/productSizes";
 import { showSuccess } from "@/lib/notifications";
 import { isProductAvailable } from "@/lib/productAvailability";
 import { Customizer } from "./Customizer";
-import { submitCartOrder } from "@/lib/orders";
+import { loadDesignDraft, submitCartOrder } from "@/lib/orders";
 import type { TShirtSize } from "@/lib/productSizes";
 
 export function OfflineCounter() {
@@ -22,7 +23,9 @@ export function OfflineCounter() {
   const [error, setError] = useState("");
   const keys = useRef(new Map<string, string>());
   useEffect(() => { refreshSharedProducts().then(setProducts).catch(() => setError("Counter products could not be loaded.")); }, []);
-  const total = lines.reduce((sum, line) => sum + (products.find((product) => product.slug === line.slug)?.price ?? 0) * line.quantity, 0);
+  const [designConfigurations, setDesignConfigurations] = useState<Record<string, Record<string, unknown>>>({});
+  useEffect(() => { let cancelled = false; Promise.all(lines.filter((line) => line.designId).map(async (line) => [line.designId!, (await loadDesignDraft(line.designId))?.configuration ?? {}] as const)).then((entries) => { if (!cancelled) setDesignConfigurations(Object.fromEntries(entries)); }).catch(() => setError("Saved design pricing could not be loaded.")); return () => { cancelled = true; }; }, [lines]);
+  const total = lines.reduce((sum, line) => sum + (products.find((product) => product.slug === line.slug) ? printPrice(products.find((product) => product.slug === line.slug)!, designConfigurations[line.designId ?? ""]) : 0) * line.quantity, 0);
   const editingProduct = editing === null ? undefined : products.find((product) => product.slug === lines[editing]?.slug);
   if (editingProduct && editing !== null) return <Customizer product={editingProduct} counterSelection={lines[editing]} onCancel={() => setEditing(null)} onPrepared={(entries) => { setLines((current) => current.flatMap((line, index) => index === editing ? entries.map((entry) => ({ slug: editingProduct.slug, quantity: entry.quantity, size: entry.size ?? "", designId: entry.designId })) : [line])); setEditing(null); }} />;
   return <main className="admin-shell"><AdminNav /><div className="admin-content"><section className="admin-card sales-panel"><h1>Offline counter</h1><p>Record a counter sale without WhatsApp or an online payment gateway. Submitting reduces the same stock used by the website.</p><Link href="/admin#reports">View offline sales reports</Link>

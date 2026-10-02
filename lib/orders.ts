@@ -1,3 +1,4 @@
+import { printPrice } from "./printPricing";
 import type { CartEntry } from "./cart";
 import type { Product } from "./products";
 import { assertOrderUploadBudget, parseOrderPayload, orderAssetKey } from "./orderSubmission";
@@ -194,7 +195,7 @@ export async function submitCartOrder(args: { cart: CartEntry[]; products: Produ
       prepared.forEach((asset) => formData.append(orderAssetKey(itemIndex, asset), asset.blob, asset.fileName));
     }
     const assets = shared?.assets.map((asset) => ({ kind: asset.kind, slot: asset.slot, fileName: asset.fileName, mimeType: asset.mimeType, designId: draft!.id, uploadItemIndex: shared!.itemIndex })) ?? [];
-    items.push({ productId: product.id, productName: product.name, quantity: entry.quantity, unitPrice: product.price, ...(entry.size ? { size: entry.size } : {}), designId: draft?.id, configuration: draft?.configuration, assets });
+    items.push({ productId: product.id, productName: product.name, quantity: entry.quantity, unitPrice: printPrice(product, draft?.configuration), ...(entry.size ? { size: entry.size } : {}), designId: draft?.id, configuration: draft?.configuration, assets });
   }
   const subtotal = items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
   const basePayload = { customerName: args.customerName.trim(), phone: args.phone.trim(), address: args.address.trim(), subtotal, items, ...(args.salesChannel ? { salesChannel: args.salesChannel } : {}) };

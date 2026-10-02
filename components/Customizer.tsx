@@ -1,5 +1,6 @@
 "use client";
 
+import { printPrice } from "@/lib/printPricing";
 import { showSuccess } from "@/lib/notifications";
 import { validateImageUpload, IMAGE_UPLOAD_HINT } from "@/lib/imageUpload";
 
@@ -121,6 +122,7 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
   const preparedDesignRef = useRef<{ signature: string; id: string } | null>(null);
   const [view, setView] = useState<"front" | "back">("front");
   const sideStates = useRef<Partial<Record<"front" | "back", { photos: PhotoLayer[]; text: string; textSize: number; textColor: string; textRotation: number; textX: number; textY: number; font: TextFont; textOpacity: number; textSurface: TextSurface; textDeformation: typeof DEFAULT_TEXT_DEFORMATION; textBold: boolean | null; textItalic: boolean | null }>>>({});
+  const [savedPrintSides, setSavedPrintSides] = useState<Partial<Record<"front" | "back", boolean>>>({});
   const sideDrafts = useRef<Partial<Record<"front" | "back", { assets: DraftAsset[]; configuration: Record<string, unknown> }>>>({});
   const [message, setMessage] = useState("");
   const [template, setTemplate] = useState(() => createDefaultTemplate(product));
@@ -190,10 +192,13 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
   const mockupSrc = template.mockupImages?.[view] ?? productView.image;
   const surfaceMap = area.surfaceMap;
   const hasDesign = Boolean(hasPhotos || (template.tools.text && textArtwork));
+  const selectedPrintSides = { ...savedPrintSides };
+  if (!hasDesign) delete selectedPrintSides[view];
+  const selectedPrice = printPrice(product, { sides: { ...selectedPrintSides, ...(hasDesign ? { [view]: true } : {}) } });
   const imageSizingEnabled = template.tools.allowScale || template.tools.allowCrop;
   const imagePrintDpi = imageMeta ? estimatedPrintDpi(imageMeta.width, imageMeta.height, area.widthMm, area.heightMm) : null;
   const effectiveActiveLayer: ActiveLayer = activeLayer === "image" && !template.tools.images && template.tools.text ? "text" : activeLayer === "text" && !template.tools.text && template.tools.images ? "image" : activeLayer;
-  const designSignature = JSON.stringify([product.id, product.price, view, photos.slice(0, photoCount).map(({ file, ...placement }) => ({ ...placement, fileName: file?.name })), text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textWrinkleMap?.key, textStyle.weight, textStyle.italic, template]);
+  const designSignature = JSON.stringify([product.id, product.price, product.frontBackPrice, view, photos.slice(0, photoCount).map(({ file, ...placement }) => ({ ...placement, fileName: file?.name })), text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textWrinkleMap?.key, textStyle.weight, textStyle.italic, template]);
   const cartSignature = `${designSignature}:${isTShirt ? serializeSizeQuantities(sizeQuantities) : quantity}`;
   const added = savedDesignSignature === cartSignature;
 
@@ -290,6 +295,7 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
     sideStates.current[view] = { photos, text, textSize, textColor, textRotation, textX, textY, font, textOpacity, textSurface, textDeformation, textBold, textItalic };
     if (hasDesign) sideDrafts.current[view] = await captureSide(`${product.slug}-${view}-${crypto.randomUUID().slice(0,8)}`);
     else delete sideDrafts.current[view];
+    setSavedPrintSides(Object.fromEntries(Object.keys(sideDrafts.current).map((side) => [side, true])));
     const nextArea = nextView === "back" ? template.backArea ?? template.area : template.area;
     setView(nextView);
     const saved = sideStates.current[nextView];
@@ -425,9 +431,9 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
 
         <aside className="customizer-panel">
           <fieldset className="customizer-purchase-fields" disabled={savingToCart}>
-          <div className="customizer-product-info"><p>{product.category}</p><h1>{product.name}</h1><span>{product.finish}{product.stockQuantity == null ? "" : ` · ${product.stockQuantity} in stock`}</span><div><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}</div></div>
+          <div className="customizer-product-info"><p>{product.category}</p><h1>{product.name}</h1><span>{product.finish}{product.stockQuantity == null ? "" : ` · ${product.stockQuantity} in stock`}</span><div><strong>{formatPrice(selectedPrice)}</strong>{product.compareAt && product.compareAt > selectedPrice && <del>{formatPrice(product.compareAt)}</del>}</div></div>
           {productViews.length > 1 && <div className="view-switch customer-view-switch" aria-label="Product side">{productViews.map((item) => <button key={item.id} disabled={savingToCart} className={view === item.id ? "active" : ""} onClick={() => changeView(item.id)}>{item.label}</button>)}</div>}
-          {productViews.length > 1 && <p className="side-save-note">Front and back keep separate designs. Both saved sides are included in one order. Text artwork is supplied as outlined EPS; previews are for placement reference.</p>}
+          {productViews.length > 1 && <p className="side-save-note">Front only: {formatPrice(product.price)} · Front + back: {formatPrice(product.frontBackPrice ?? product.price)}. Front and back keep separate designs. Both saved sides are included in one order. Text artwork is supplied as outlined EPS; previews are for placement reference.</p>}
           <div className="tool-tabs">
             {template.tools.images && <button className={effectiveActiveLayer === "image" ? "active" : ""} onClick={() => setActiveLayer("image")}><Upload size={17} /> Photo</button>}
             {template.tools.text && <button className={effectiveActiveLayer === "text" ? "active" : ""} onClick={() => setActiveLayer("text")}><Type size={17} /> Text</button>}
@@ -480,8 +486,8 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
           <div className="print-quality"><Check /><div><strong>{area.surface === "fabric" ? "Wrinkle-mapped fabric preview" : area.precisionWrap ? "Precision cylindrical preview" : "Mapped product preview"}</strong><small>{area.widthMm} × {area.heightMm} mm · target {area.targetDpi} DPI · {productView.label} · preview only</small></div></div>
           {isTShirt ? <SizeQuantitySelector stock={product.sizeStock} quantities={sizeQuantities} onChange={setSizeQuantities} disabled={savingToCart} /> : <QuantitySelector quantity={quantity} onChange={setQuantity} disabled={savingToCart} />}
           <p className="purchase-note">{requirePersonalisation && !hasDesign ? "Add a photo or text to order with personalisation." : hasDesign ? "Your design will be applied to each item in this quantity." : "No artwork added: this item will be ordered without personalisation."}{purchaseIntent === "buy-now" && " When your design is ready, choose Buy now below."}</p>
-          <div className="customizer-actions"><button className="reset-button" onClick={reset}><RotateCcw size={16} /> Reset</button>{added ? <Link className="add-cart-button added" href="/?cart=open"><ShoppingBag /> View your cart</Link> : <button className="add-cart-button" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("cart")}><ShoppingBag /> {savingToCart || (waitingForTextRender && textRenderState === "rendering") || (waitingForImageRender && imageRenderState === "rendering") ? "Preparing files…" : `${onPrepared ? "Save counter design" : "Add to cart"} · ${formatPrice(product.price * selectedQuantity)}`}</button>}</div>
-          {!onPrepared && <button className="button customizer-buy-now" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("buy-now")}>{savingToCart ? "Preparing files…" : `Buy now · ${formatPrice(product.price * selectedQuantity)}`}</button>}
+          <div className="customizer-actions"><button className="reset-button" onClick={reset}><RotateCcw size={16} /> Reset</button>{added ? <Link className="add-cart-button added" href="/?cart=open"><ShoppingBag /> View your cart</Link> : <button className="add-cart-button" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("cart")}><ShoppingBag /> {savingToCart || (waitingForTextRender && textRenderState === "rendering") || (waitingForImageRender && imageRenderState === "rendering") ? "Preparing files…" : `${onPrepared ? "Save counter design" : "Add to cart"} · ${formatPrice(selectedPrice * selectedQuantity)}`}</button>}</div>
+          {!onPrepared && <button className="button customizer-buy-now" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("buy-now")}>{savingToCart ? "Preparing files…" : `Buy now · ${formatPrice(selectedPrice * selectedQuantity)}`}</button>}
           {message && <p className="editor-message" role="status">{message}</p>}
           </fieldset>
         </aside>

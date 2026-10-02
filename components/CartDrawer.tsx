@@ -1,5 +1,6 @@
 "use client";
 
+import { printPrice } from "@/lib/printPricing";
 import Image from "next/image";
 import { ArrowRight, CircleAlert, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useId, useState } from "react";
@@ -33,20 +34,21 @@ export function CartDrawer({ open, cart, products, onClose, onQuantity, onRemove
   const [error, setError] = useState("");
   const [savedOrder, setSavedOrder] = useState<OrderRecord | null>(null);
   const [designFiles, setDesignFiles] = useState<Record<string, string[]>>({});
+  const [designConfigurations, setDesignConfigurations] = useState<Record<string, Record<string, unknown>>>({});
   const dialogRef = useDialog(open, onClose);
   const lines = cart.flatMap((entry) => {
     const product = products.find((item) => item.id === entry.productId);
     return product ? [{ ...entry, product }] : [];
   });
-  const subtotal = lines.reduce((total, line) => total + line.product.price * line.quantity, 0);
+  const subtotal = lines.reduce((total, line) => total + printPrice(line.product, designConfigurations[line.designId ?? ""]) * line.quantity, 0);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     Promise.all(cart.filter((entry) => entry.designId).map(async (entry) => {
       const draft = await loadDesignDraft(entry.designId);
-      return [entry.designId!, draft?.assets.map((asset) => asset.fileName) ?? []] as const;
-    })).then((entries) => { if (!cancelled) setDesignFiles(Object.fromEntries(entries)); })
+      return { id: entry.designId!, files: draft?.assets.map((asset) => asset.fileName) ?? [], configuration: draft?.configuration ?? {} };
+    })).then((entries) => { if (!cancelled) { setDesignFiles(Object.fromEntries(entries.map((entry) => [entry.id, entry.files]))); setDesignConfigurations(Object.fromEntries(entries.map((entry) => [entry.id, entry.configuration]))); } })
       .catch(() => { if (!cancelled) setDesignFiles({}); });
     return () => { cancelled = true; };
   }, [cart, open]);
@@ -81,7 +83,7 @@ export function CartDrawer({ open, cart, products, onClose, onQuantity, onRemove
         <div className="cart-lines">
           {lines.map(({ product, quantity, designId, size }) => <article className="cart-line" key={cartEntryKey({ productId: product.id, designId, size })}>
             <div className="cart-line-image"><Image src={product.image} alt="" width={90} height={110} unoptimized={product.image.startsWith("data:")} /></div>
-            <div className="cart-line-copy"><small>{product.category}</small><h3>{product.name}</h3><span>{product.finish}</span><strong>{formatPrice(product.price * quantity)}</strong>
+            <div className="cart-line-copy"><small>{product.category}</small><h3>{product.name}</h3><span>{product.finish}</span><strong>{formatPrice(printPrice(product, designConfigurations[designId ?? ""]) * quantity)}</strong>
               <span className="cart-design-label">{designId ? `Personalised design · ${designId.slice(-8)}` : "Without personalisation"}</span>
               {isTShirtCategory(product.category) && <label className="cart-size-field"><span>{size ? `Size ${size}` : "Choose T-shirt size"}</span><select required disabled={submitting} aria-label={`Size for ${product.name}${size ? `, current ${size}` : ""}${designId ? `, design ${designId.slice(-8)}` : ""}`} value={size ?? ""} onChange={(event) => { try { onSize(product.id, event.target.value as TShirtSize, designId, size); setError(""); } catch (failure) { setError(failure instanceof Error ? failure.message : "The size could not be updated."); } }}><option value="" disabled>Select size</option>{T_SHIRT_SIZES.map((option) => <option value={option} key={option} disabled={product.sizeStock?.[option] === 0}>{option}{product.sizeStock?.[option] === 0 ? " · Out of stock" : ""}</option>)}</select></label>}
               {designId && designFiles[designId]?.length > 0 && <details className="checkout-design-files"><summary>Prepared order files ({designFiles[designId].length})</summary><ul>{designFiles[designId].map((fileName) => <li key={fileName}>{fileName}</li>)}</ul></details>}

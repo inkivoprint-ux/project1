@@ -25,6 +25,7 @@ const productSchema = z.object({
   shortName: z.string(), category: z.string().min(1), price: z.number().finite().nonnegative(),
   stockQuantity: z.number().int().min(0).max(1000000).nullable().optional(),
   sizeStock: z.object({ XS: z.number().int().min(0).max(1000000), XXL: z.number().int().min(0).max(1000000), S: z.number().int().min(0).max(1000000), M: z.number().int().min(0).max(1000000), L: z.number().int().min(0).max(1000000), XL: z.number().int().min(0).max(1000000) }).nullable().optional(),
+  frontBackPrice: z.number().finite().positive().optional(),
   compareAt: z.number().finite().positive().optional(), image: imagePath,
   views: z.array(z.object({ id: z.enum(["front", "back"]), label: z.string(), image: imagePath })).optional(),
   finish: z.string(), badge: z.string().optional(), displayOrder: z.number().int().min(1).max(10000).optional(), description: z.string(),

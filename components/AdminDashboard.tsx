@@ -19,13 +19,13 @@ import { hasSupabaseConfiguration } from "@/lib/supabase/config";
 import { refreshSharedProducts, refreshSharedTemplate, saveSharedProduct, saveSharedTemplate } from "@/lib/sharedCatalog";
 
 type ProductForm = {
-  name: string; shortName: string; category: string; price: string; compareAt: string;
+  name: string; shortName: string; category: string; price: string; frontBackPrice: string; compareAt: string;
   finish: string; description: string; image: string; badge: string; displayOrder: string;
   surface: Product["printArea"]["surface"]; widthMm: string; heightMm: string; diameterMm: string;
 };
 
 const emptyProduct: ProductForm = {
-  name: "", shortName: "", category: "", price: "", compareAt: "", finish: "", description: "", image: "", badge: "New", displayOrder: "1",
+  name: "", shortName: "", category: "", price: "", frontBackPrice: "", compareAt: "", finish: "", description: "", image: "", badge: "New", displayOrder: "1",
   surface: "cylinder", widthMm: "80", heightMm: "110", diameterMm: "75",
 };
 
@@ -87,10 +87,11 @@ export function AdminDashboard() {
     const price = Number(form.price), widthMm = Number(form.widthMm), heightMm = Number(form.heightMm), diameterMm = Number(form.diameterMm);
     if (![price, widthMm, heightMm].every((value) => Number.isFinite(value) && value > 0) || (form.surface !== "fabric" && !(Number.isFinite(diameterMm) && diameterMm > 0))) return setFormError("Enter valid price and production dimensions greater than zero.");
 
+    if (form.frontBackPrice && !(Number.isFinite(Number(form.frontBackPrice)) && Number(form.frontBackPrice) > 0)) return setFormError("Enter a valid front + back price.");
     const product: Product = {
       ...editingProduct,
       id: editingProduct?.id ?? `custom-${slug}`, slug: editingProduct?.slug ?? slug, name: form.name.trim(), shortName: form.shortName.trim() || form.name.trim(),
-      category: form.category.trim(), price, compareAt: Number(form.compareAt) > price ? Number(form.compareAt) : undefined,
+      category: form.category.trim(), price, frontBackPrice: /t[\s-]?shirt/i.test(form.category) && form.frontBackPrice ? Number(form.frontBackPrice) : undefined, compareAt: Number(form.compareAt) > price ? Number(form.compareAt) : undefined,
       image: form.image, finish: form.finish.trim(), badge: form.badge || undefined, displayOrder: Number(form.displayOrder), description: form.description.trim(),
       printArea: editingProduct?.printArea ?? { surface: form.surface, widthMm, heightMm, diameterMm: form.surface === "fabric" ? undefined : diameterMm },
     };
@@ -119,7 +120,7 @@ export function AdminDashboard() {
   const editProduct = (product: Product) => {
     if (!catalogueReady) return;
     setEditingProduct(product);
-    setForm({ name: product.name, shortName: product.shortName, category: product.category, price: String(product.price), compareAt: product.compareAt ? String(product.compareAt) : "", finish: product.finish, description: product.description, image: product.image, badge: product.badge ?? "", displayOrder: String(catalogue.findIndex((item) => item.id === product.id) + 1), surface: product.printArea.surface, widthMm: String(product.printArea.widthMm), heightMm: String(product.printArea.heightMm), diameterMm: String(product.printArea.diameterMm ?? 75) });
+    setForm({ name: product.name, shortName: product.shortName, category: product.category, price: String(product.price), frontBackPrice: product.frontBackPrice ? String(product.frontBackPrice) : "", compareAt: product.compareAt ? String(product.compareAt) : "", finish: product.finish, description: product.description, image: product.image, badge: product.badge ?? "", displayOrder: String(catalogue.findIndex((item) => item.id === product.id) + 1), surface: product.printArea.surface, widthMm: String(product.printArea.widthMm), heightMm: String(product.printArea.heightMm), diameterMm: String(product.printArea.diameterMm ?? 75) });
     setFormError(""); setAddOpen(true);
   };
 
@@ -174,7 +175,8 @@ export function AdminDashboard() {
               <label><span>Short name</span><input value={form.shortName} onChange={(event) => setField("shortName", event.target.value)} placeholder="Ceramic Mug" /></label>
               <label><span>Category *</span><input required value={form.category} onChange={(event) => setField("category", event.target.value)} placeholder="Mugs" /></label>
               <label><span>Finish / capacity *</span><input required value={form.finish} onChange={(event) => setField("finish", event.target.value)} placeholder="Gloss white · 330 ml" /></label>
-              <label><span>Selling price (₹) *</span><input required min="1" step="1" type="number" value={form.price} onChange={(event) => setField("price", event.target.value)} placeholder="699" /></label>
+              <label><span>Selling price / T-shirt front only (₹) *</span><input required min="1" step="1" type="number" value={form.price} onChange={(event) => setField("price", event.target.value)} placeholder="699" /></label>
+              {/t[\s-]?shirt/i.test(form.category) && <label><span>T-shirt front + back price (₹)</span><input min="1" step="1" type="number" value={form.frontBackPrice} onChange={(event) => setField("frontBackPrice", event.target.value)} placeholder="Leave blank to use front price" /></label>}
               <label><span>Compare-at price (₹)</span><input min="1" step="1" type="number" value={form.compareAt} onChange={(event) => setField("compareAt", event.target.value)} placeholder="799" /></label>
               <label><span>Product badge</span><select value={form.badge} onChange={(event) => setField("badge", event.target.value)}><option value="">No badge</option><option value="Bestseller">Bestseller</option><option value="New">New</option>{form.badge && !["Bestseller", "New"].includes(form.badge) && <option value={form.badge}>{form.badge}</option>}</select></label>
               <label><span>Display position</span><select value={form.displayOrder} onChange={(event) => setField("displayOrder", event.target.value)}>{Array.from({ length: catalogue.length + (editingProduct ? 0 : 1) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}{index === 0 ? " — First" : ""}</option>)}</select><small>Other products shift automatically.</small></label>

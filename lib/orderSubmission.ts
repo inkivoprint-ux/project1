@@ -1,3 +1,4 @@
+import { hasBothPrintSides, printPrice } from "./printPricing";
 import { z } from "zod";
 import type { OrderItemRecord } from "./orders";
 import { T_SHIRT_SIZES } from "./productSizes";
@@ -125,8 +126,9 @@ export function collectOrderFiles(payload: OrderPayload, formData: FormData) {
   return files;
 }
 
-export function assertOrderProduct(item: OrderItemRecord, product: { name: string; base_price: number | string; offer_price: number | string | null; is_active: boolean } | null) {
-  if (!product || !product.is_active || product.name !== item.productName || Number(product.offer_price ?? product.base_price) !== item.unitPrice) throw new Error("A product or price has changed. Refresh your cart before submitting. Browser-only products must be added to the shared catalogue first.");
+export function assertOrderProduct(item: OrderItemRecord, product: { name: string; base_price: number | string; offer_price: number | string | null; is_active: boolean; storefront_config?: { category?: string; frontBackPrice?: number } } | null) {
+  if (item.assets.some((asset) => asset.kind === "edited" && (asset.slot ?? 0) === 0) && item.assets.some((asset) => asset.kind === "edited" && asset.slot === 1) && !hasBothPrintSides(item.configuration)) throw new Error("Both print sides must be included in the saved design. Personalise this product again.");
+  if (!product || !product.is_active || product.name !== item.productName || printPrice({ price: Number(product.offer_price ?? product.base_price), category: product.storefront_config?.category ?? "", frontBackPrice: product.storefront_config?.frontBackPrice }, item.configuration) !== item.unitPrice) throw new Error("A product or price has changed. Refresh your cart before submitting. Browser-only products must be added to the shared catalogue first.");
 }
 
 export function orderAssetKey(index: number, asset: { kind: string; slot?: number }) {

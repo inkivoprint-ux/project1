@@ -5,6 +5,7 @@ export type Product = {
   shortName: string;
   category: string;
   price: number;
+  frontBackPrice?: number;
   compareAt?: number;
   stockQuantity?: number | null;
   sizeStock?: Record<"XS" | "S" | "M" | "L" | "XL" | "XXL", number> | null;
