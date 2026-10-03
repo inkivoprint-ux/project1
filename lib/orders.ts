@@ -179,6 +179,7 @@ export async function submitCartOrder(args: { cart: CartEntry[]; products: Produ
     const product = args.products.find((item) => item.id === entry.productId);
     if (!product) throw new Error("A product in your cart is no longer available.");
     assertProductSize(entry.size, product.category, product.name);
+    if (!entry.designId) throw new Error(`Customize ${product.name} before ordering.`);
     const draft = await loadDesignDraft(entry.designId);
     if (entry.designId && !draft) throw new Error(`The saved design files for ${product.name} could not be found. Please customize it again.`);
     if (draft && draft.productId !== product.id) throw new Error(`The saved design does not match ${product.name}.`);

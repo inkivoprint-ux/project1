@@ -114,7 +114,6 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
   const [sizeQuantities, setSizeQuantities] = useState(emptySizeQuantities);
   const isTShirt = isTShirtCategory(product.category);
   const selectedQuantity = isTShirt ? totalSizeQuantity(sizeQuantities) : quantity;
-  const [requirePersonalisation, setRequirePersonalisation] = useState(false);
   const [purchaseIntent, setPurchaseIntent] = useState("cart");
   const [purchaseContextReady, setPurchaseContextReady] = useState(false);
   const [buyNow, setBuyNow] = useState<CartEntry[] | null>(null);
@@ -157,7 +156,6 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
       const params = new URLSearchParams(window.location.search);
       setQuantity(normalizePurchaseQuantity(counterSelection?.quantity ?? params.get("quantity")));
       if (isTShirt) setSizeQuantities(parseSizeQuantities(counterSelection?.size ? `${counterSelection.size}:${counterSelection.quantity}` : params.get("sizes")));
-      setRequirePersonalisation(Boolean(counterSelection) || params.get("personalise") === "1");
       setPurchaseIntent(params.get("intent") === "buy-now" ? "buy-now" : "cart");
       setView(params.get("view") === "back" && allowsBackView ? "back" : "front");
       setPurchaseContextReady(true);
@@ -177,7 +175,7 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
   useEffect(() => {
     const refresh = () => setTemplate(loadCustomerTemplate(product));
     const timer = window.setTimeout(() => {
-      if (hasSupabaseConfiguration()) refreshSharedTemplate(product).then(() => { refresh(); setTemplateReady(true); }).catch(() => setMessage("The print template could not be loaded. Reload before personalising."));
+      if (hasSupabaseConfiguration()) refreshSharedTemplate(product).then(() => { refresh(); setTemplateReady(true); }).catch(() => setMessage("The print template could not be loaded. Reload before customizing."));
       else refresh();
     }, 0);
     const unsubscribe = subscribeToTemplates(refresh);
@@ -330,9 +328,8 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
     if (!templateReady || loadedMockup !== mockupSrc || !purchaseContextReady || purchaseBusyRef.current || waitingForTextFont || waitingForTextRender || waitingForImageRender) return;
     try { createProductPurchaseEntries(product, quantity, sizeQuantities); }
     catch (failure) { setMessage(failure instanceof Error ? failure.message : "Choose your size and quantity."); return; }
-    const requestedDesign = Boolean(hasPhotos || (template.tools.text && text.trim()));
-    if ((requirePersonalisation || requestedDesign) && !hasDesign && !Object.keys(sideDrafts.current).length) {
-      setMessage("Add a photo or text and wait for the preview before ordering with personalisation.");
+    if (!hasDesign && !Object.keys(sideDrafts.current).some((side) => side !== view)) {
+      setMessage("Add a photo or text and wait for the preview before ordering with customization.");
       return;
     }
     purchaseBusyRef.current = true;
@@ -359,7 +356,7 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
         addCartEntries(entries);
         setSavedDesignSignature(cartSignature);
         showSuccess("Added to cart successfully. Your artwork files are saved with the item.");
-        setMessage(designId ? "Your personalised item and generated files are saved in your cart." : "Product added to your cart without personalisation.");
+        setMessage("Your customized item and generated files are saved in your cart.");
       }
     } catch (failure) {
       setMessage(failure instanceof Error ? failure.message : "The design files could not be prepared. Please try again.");
@@ -439,7 +436,7 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
             {template.tools.text && <button className={effectiveActiveLayer === "text" ? "active" : ""} onClick={() => setActiveLayer("text")}><Type size={17} /> Text</button>}
           </div>
 
-          {!template.tools.images && !template.tools.text ? <div className="tool-content tool-disabled"><h2>Personalisation unavailable</h2><p>This product template does not currently allow customer photos or text.</p></div> : effectiveActiveLayer === "image" && template.tools.images ? (
+          {!template.tools.images && !template.tools.text ? <div className="tool-content tool-disabled"><h2>Customization unavailable</h2><p>This product template does not currently allow customer photos or text.</p></div> : effectiveActiveLayer === "image" && template.tools.images ? (
             <div className="tool-content">
               {photoCount === 2 && <div className="photo-layer-picker" role="group" aria-label="Choose image to edit">{photos.slice(0, photoCount).map((entry, index) => <button key={index} type="button" className={activePhotoIndex === index ? "active" : ""} aria-pressed={activePhotoIndex === index} onClick={() => { endDrag(); setSelectedPhoto(index); }}><ImagePlus size={16} /> {index === 0 ? "Photo · bottom" : "Logo / photo · top"}{entry.url && <Check size={14} />}</button>)}</div>}
               <h2>{imageUrl ? "Position your image" : "Add your image"}</h2>
@@ -485,7 +482,7 @@ export function Customizer({ product, onPrepared, onCancel, counterSelection }: 
 
           <div className="print-quality"><Check /><div><strong>{area.surface === "fabric" ? "Wrinkle-mapped fabric preview" : area.precisionWrap ? "Precision cylindrical preview" : "Mapped product preview"}</strong><small>{area.widthMm} × {area.heightMm} mm · target {area.targetDpi} DPI · {productView.label} · preview only</small></div></div>
           {isTShirt ? <SizeQuantitySelector stock={product.sizeStock} quantities={sizeQuantities} onChange={setSizeQuantities} disabled={savingToCart} /> : <QuantitySelector quantity={quantity} onChange={setQuantity} disabled={savingToCart} />}
-          <p className="purchase-note">{requirePersonalisation && !hasDesign ? "Add a photo or text to order with personalisation." : hasDesign ? "Your design will be applied to each item in this quantity." : "No artwork added: this item will be ordered without personalisation."}{purchaseIntent === "buy-now" && " When your design is ready, choose Buy now below."}</p>
+          <p className="purchase-note">{!hasDesign ? "Add a photo or text to order with customization." : hasDesign ? "Your design will be applied to each item in this quantity." : "Add artwork before ordering."}{purchaseIntent === "buy-now" && " When your design is ready, choose Buy now below."}</p>
           <div className="customizer-actions"><button className="reset-button" onClick={reset}><RotateCcw size={16} /> Reset</button>{added ? <Link className="add-cart-button added" href="/?cart=open"><ShoppingBag /> View your cart</Link> : <button className="add-cart-button" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("cart")}><ShoppingBag /> {savingToCart || (waitingForTextRender && textRenderState === "rendering") || (waitingForImageRender && imageRenderState === "rendering") ? "Preparing files…" : `${onPrepared ? "Save counter design" : "Add to cart"} · ${formatPrice(selectedPrice * selectedQuantity)}`}</button>}</div>
           {!onPrepared && <button className="button customizer-buy-now" disabled={!templateReady || loadedMockup !== mockupSrc || !selectedQuantity || !purchaseContextReady || savingToCart || waitingForTextFont || waitingForTextRender || waitingForImageRender} onClick={() => purchase("buy-now")}>{savingToCart ? "Preparing files…" : `Buy now · ${formatPrice(selectedPrice * selectedQuantity)}`}</button>}
           {message && <p className="editor-message" role="status">{message}</p>}

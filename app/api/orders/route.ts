@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     const bytes = await readLimitedBody(request, MAX_ORDER_REQUEST_BYTES);
     formData = await new Response(bytes, { headers: { "Content-Type": request.headers.get("content-type") || "" } }).formData();
     payload = parseOrderPayload(JSON.parse(String(formData.get("payload") || "{}")));
+    if (payload.items.some((item) => !item.designId || !item.assets.some((asset) => asset.kind === "edited") || !item.assets.some((asset) => asset.kind === "preview"))) throw new Error("Every product requires a saved customization before ordering.");
     if (payload.salesChannel === "offline") {
       const session = await getAdminSession();
       if (session.error) return Response.json({ error: session.error }, { status: session.status });

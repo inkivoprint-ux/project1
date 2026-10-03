@@ -67,7 +67,7 @@ export function Header({ cartCount = 0, searchValue = "", searchResultsCount, on
         <div className="mobile-menu-intro"><span>MAKE IT PERSONAL</span><h2>A little thought.<br />A lasting memory.</h2><p>Find a gift, add your story, make their day.</p></div>
         <button className="mobile-search-link" onClick={() => { setMenuOpen(false); setSearchOpen(true); }}><Search size={18} /> Search products <ArrowRight size={16} /></button>
         <nav aria-label="Mobile navigation">
-          <a href="#shop" onClick={() => setMenuOpen(false)}><span className="mobile-nav-icon"><ShoppingBag size={20} /></span><span>Shop personalised gifts<small>Everyday favourites, made yours</small></span><ArrowRight size={16} /></a>
+          <a href="#shop" onClick={() => setMenuOpen(false)}><span className="mobile-nav-icon"><ShoppingBag size={20} /></span><span>Shop customized gifts<small>Everyday favourites, made yours</small></span><ArrowRight size={16} /></a>
           <a href="#gifting" onClick={() => setMenuOpen(false)}><span className="mobile-nav-icon"><Gift size={20} /></span><span>Corporate gifting<small>Thoughtful gifts for your team</small></span><ArrowRight size={16} /></a>
           <a href="#about" onClick={() => setMenuOpen(false)}><span className="mobile-nav-icon"><HeartHandshake size={20} /></span><span>Our story<small>Made with care in Kerala</small></span><ArrowRight size={16} /></a>
           <a href="#contact" onClick={() => setMenuOpen(false)}><span className="mobile-nav-icon"><MessageCircle size={20} /></span><span>Contact<small>We’re here to help</small></span><ArrowRight size={16} /></a>

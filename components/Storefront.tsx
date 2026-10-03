@@ -60,7 +60,7 @@ export function Storefront({ initialProducts = products }: { initialProducts?: P
         <div className="hero-grain" />
         <div className="container hero-grid">
           <div className="hero-copy reveal">
-            <span className="eyebrow light"><Sparkles size={14} /> Personalised, beautifully</span>
+            <span className="eyebrow light"><Sparkles size={14} /> Customized, beautifully</span>
             <h1>Make it <em>theirs.</em><br />Make it memorable.</h1>
             <p>Turn everyday essentials into keepsakes with photos, names, and artwork that mean something.</p>
             <div className="hero-actions">
@@ -72,7 +72,7 @@ export function Storefront({ initialProducts = products }: { initialProducts?: P
             <div className="orbit orbit-one" />
             <div className="orbit orbit-two" />
             <div className="hero-badge"><span>your memory</span><strong>here</strong></div>
-            <Image src="/products/cork-base-bottle.png" alt="Personalised black bottle with cork base" width={1024} height={1536} sizes="(max-width: 900px) 260px, 380px" preload className="hero-product" />
+            <Image src="/products/cork-base-bottle.png" alt="Customized black bottle with cork base" width={1024} height={1536} sizes="(max-width: 900px) 260px, 380px" preload className="hero-product" />
             <div className="floating-note"><span className="note-icon">♡</span><span><strong>Made for them</strong><small>Designed by you</small></span></div>
           </div>
         </div>
@@ -133,7 +133,7 @@ export function Storefront({ initialProducts = products }: { initialProducts?: P
       <section className="gifting-cta" id="gifting">
         <Heart className="gifting-heart" aria-hidden="true" strokeWidth={1} />
         <div className="container gifting-inner">
-          <div><span className="eyebrow light">Gifting for teams & celebrations</span><h2>Many people.<br /><em>One thoughtful gesture.</em></h2><p>Personalised gifting for teams, weddings, events, and everyone on your list.</p></div>
+          <div><span className="eyebrow light">Gifting for teams & celebrations</span><h2>Many people.<br /><em>One thoughtful gesture.</em></h2><p>Customized gifting for teams, weddings, events, and everyone on your list.</p></div>
           <a className="button button--cream" href={`${contact.whatsapp}?text=Hello%20Inkivo%2C%20I%27d%20like%20to%20discuss%20a%20bulk%20gifting%20order.`} target="_blank" rel="noopener noreferrer">Plan a bulk order <ArrowRight size={18} /></a>
         </div>
       </section>

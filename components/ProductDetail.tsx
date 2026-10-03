@@ -1,19 +1,19 @@
 "use client";
 
-import { showSuccess } from "@/lib/notifications";
+
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, ShoppingBag, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
-import { addCartEntries, cartItemCount, loadCart, removeCartItem, subscribeToCart, updateCartItem, updateCartItemSize, type CartEntry } from "@/lib/cart";
+import { cartItemCount, loadCart, removeCartItem, subscribeToCart, updateCartItem, updateCartItemSize, type CartEntry } from "@/lib/cart";
 import { loadAllProducts, subscribeToProductCatalog } from "@/lib/productCatalog";
 import { formatPrice, type Product } from "@/lib/products";
-import { createProductPurchaseEntries } from "@/lib/purchase";
+
 import { emptySizeQuantities, isTShirtCategory, serializeSizeQuantities, totalSizeQuantity } from "@/lib/productSizes";
 import { SizeQuantitySelector } from "./SizeQuantitySelector";
 import { BrandLogo } from "./BrandLogo";
-import { BuyNowCheckout } from "./BuyNowCheckout";
+
 import { CartDrawer } from "./CartDrawer";
 import { QuantitySelector } from "./QuantitySelector";
 import { hasSupabaseConfiguration } from "@/lib/supabase/config";
@@ -26,12 +26,10 @@ export function ProductDetail({ product }: { product: Product }) {
   const [sizeQuantities, setSizeQuantities] = useState(emptySizeQuantities);
   const isTShirt = isTShirtCategory(product.category);
   const selectedQuantity = isTShirt ? totalSizeQuantity(sizeQuantities) : quantity;
-  const [personalised, setPersonalised] = useState(false);
   const [view, setView] = useState("front");
   const [cart, setCart] = useState<CartEntry[]>([]);
   const [catalogue, setCatalogue] = useState<Product[]>([product]);
   const [cartOpen, setCartOpen] = useState(false);
-  const [buyNow, setBuyNow] = useState<CartEntry[] | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -47,10 +45,6 @@ export function ProductDetail({ product }: { product: Product }) {
   const views = [...(product.views ?? [{ id: "front" as const, label: "Front", image: product.image }]), ...(isTShirt && !product.views?.some((entry) => entry.id === "back") ? [{ id: "back" as const, label: "Back", image: frontImage }] : [])].map((entry) => isTShirt && entry.id === "back" ? { ...entry, label: "Back", image: frontImage } : entry);
   const image = views.find((item) => item.id === view)?.image ?? product.image;
   const customizerUrl = `/customize/${product.slug}?quantity=${selectedQuantity}&personalise=1&view=${view}${isTShirt ? `&sizes=${encodeURIComponent(serializeSizeQuantities(sizeQuantities))}` : ""}`;
-  function addToCart() {
-    try { setCart(addCartEntries(createProductPurchaseEntries(product, quantity, sizeQuantities))); setCartOpen(true); setError(""); showSuccess("Added to cart successfully."); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : "Your cart could not be saved. Please allow browser storage and try again."); }
-  }
 
   return <div className="product-detail-shell">
     <header className="product-detail-header container">
@@ -67,27 +61,20 @@ export function ProductDetail({ product }: { product: Product }) {
         <span className="eyebrow">{product.category}</span><h1>{product.name}</h1><p className="product-detail-finish">{product.finish}</p>
         <p className={`product-stock-status ${product.stockQuantity == null ? "" : `stock-${stockLevel(product.stockQuantity)}`}`}>{product.stockQuantity == null ? "" : product.stockQuantity === 0 ? "Out of stock" : `${product.stockQuantity} units in stock`}</p><div className="product-detail-price"><strong>{formatPrice(product.price)}</strong>{product.compareAt && <del>{formatPrice(product.compareAt)}</del>}<small>per item</small></div>{isTShirtCategory(product.category) && product.frontBackPrice && <p>Front only: {formatPrice(product.price)} · Front + back: {formatPrice(product.frontBackPrice)}</p>}
         <div className="product-description"><h2>About this product</h2><p>{product.description || "Contact the Inkivo team for more information about this product."}</p></div>
-        <dl className="product-detail-specs"><div><dt>Finish / specification</dt><dd>{product.finish}</dd></div><div><dt>Personalisation area</dt><dd>{product.printArea.widthMm} × {product.printArea.heightMm} mm</dd></div>{product.views && <div><dt>Available previews</dt><dd>{product.views.map((item) => item.label).join(" / ")}</dd></div>}</dl>
-        <fieldset className="purchase-options"><legend>Make it yours</legend>
-          <label className={!personalised ? "selected" : ""}><input type="radio" name="personalisation" checked={!personalised} onChange={() => setPersonalised(false)} /><span>Without personalisation<small>Order the product as shown</small></span></label>
-          <label className={personalised ? "selected" : ""}><input type="radio" name="personalisation" checked={personalised} onChange={() => setPersonalised(true)} /><span>With personalisation<small>Add your photo, name or text in the editor</small></span><Sparkles size={18} /></label>
-        </fieldset>
+        <dl className="product-detail-specs"><div><dt>Finish / specification</dt><dd>{product.finish}</dd></div><div><dt>Customization area</dt><dd>{product.printArea.widthMm} × {product.printArea.heightMm} mm</dd></div>{product.views && <div><dt>Available previews</dt><dd>{product.views.map((item) => item.label).join(" / ")}</dd></div>}</dl>
+        <p>Add your photo, logo or text in the customization editor before ordering.</p>
         {isTShirt ? <SizeQuantitySelector stock={product.sizeStock} quantities={sizeQuantities} onChange={setSizeQuantities} /> : <QuantitySelector quantity={quantity} onChange={setQuantity} />}
         <div className="purchase-total"><span>Item total</span><strong>{formatPrice(product.price * selectedQuantity)}</strong></div>
-        <div className="purchase-buttons">{personalised && selectedQuantity > 0 ? <>
-          <Link className="button purchase-secondary" href={`${customizerUrl}&intent=cart`}><ShoppingBag size={18} /> Personalise & add to cart</Link>
-          <Link className="button" href={`${customizerUrl}&intent=buy-now`}>Personalise & buy now <ArrowRight size={18} /></Link>
-        </> : <>
-          <button className="button purchase-secondary" disabled={!selectedQuantity} onClick={addToCart}><ShoppingBag size={18} /> {personalised ? "Personalise & add to cart" : "Add to cart"}</button>
-          <button className="button" disabled={!selectedQuantity} onClick={() => setBuyNow(createProductPurchaseEntries(product, quantity, sizeQuantities))}>{personalised ? "Personalise & buy now" : "Buy now"} <ArrowRight size={18} /></button>
-        </>}</div>
-        <p className="purchase-note">{personalised ? "Create and preview your design first. Your selected quantity carries into the editor." : "Buy now checks out only this product; your shopping cart is not changed."} Final order details are confirmed on WhatsApp.</p>
+        <div className="purchase-buttons">{selectedQuantity > 0 ? <>
+          <Link className="button purchase-secondary" href={`${customizerUrl}&intent=cart`}><ShoppingBag size={18} /> Customize & add to cart</Link>
+          <Link className="button" href={`${customizerUrl}&intent=buy-now`}>Customize & buy now <ArrowRight size={18} /></Link>
+        </> : <button className="button" disabled>Choose a size and quantity to customize</button>}</div>
+        <p className="purchase-note">Create and preview your design first. Your selected quantity carries into the editor. Final order details are confirmed on WhatsApp.</p>
         <OrderSupport />
         {error && <p className="purchase-error" role="alert">{error}</p>}
         <Link href="/#contact" className="text-link">Questions about this product? Talk to us <ArrowRight size={16} /></Link>
       </section>
     </main>
     <CartDrawer open={cartOpen} cart={cart} products={catalogue} onClose={() => setCartOpen(false)} onQuantity={(id, amount, designId, size) => setCart(updateCartItem(id, amount, designId, size))} onRemove={(id, designId, size) => setCart(removeCartItem(id, designId, size))} onSize={(id, size, designId, previousSize) => setCart(updateCartItemSize(id, size, designId, previousSize))} />
-    {buyNow && <BuyNowCheckout entries={buyNow} product={product} onClose={() => setBuyNow(null)} />}
   </div>;
 }

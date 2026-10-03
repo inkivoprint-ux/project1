@@ -180,7 +180,7 @@ export function AdminDashboard() {
               <label><span>Compare-at price (₹)</span><input min="1" step="1" type="number" value={form.compareAt} onChange={(event) => setField("compareAt", event.target.value)} placeholder="799" /></label>
               <label><span>Product badge</span><select value={form.badge} onChange={(event) => setField("badge", event.target.value)}><option value="">No badge</option><option value="Bestseller">Bestseller</option><option value="New">New</option>{form.badge && !["Bestseller", "New"].includes(form.badge) && <option value={form.badge}>{form.badge}</option>}</select></label>
               <label><span>Display position</span><select value={form.displayOrder} onChange={(event) => setField("displayOrder", event.target.value)}>{Array.from({ length: catalogue.length + (editingProduct ? 0 : 1) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}{index === 0 ? " — First" : ""}</option>)}</select><small>Other products shift automatically.</small></label>
-              <label className="full"><span>Description *</span><textarea required value={form.description} onChange={(event) => setField("description", event.target.value)} placeholder="Describe the product and its personalisation surface." /></label>
+              <label className="full"><span>Description *</span><textarea required value={form.description} onChange={(event) => setField("description", event.target.value)} placeholder="Describe the product and its customization surface." /></label>
             </div>
             {!editingProduct && <section className="product-surface-form">
               <div><h3>Print surface setup</h3><p>This creates the first editable template. You can visually adjust it after saving.</p></div>

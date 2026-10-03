@@ -41,7 +41,7 @@ export function AdminOrders({ onCount, channel = "online" }: { onCount?: (count:
       {groupOrderArtwork(order).map((group, index) => <div className="admin-order-item" key={`${group.item.productId}-${index}`}>
         <div className="admin-order-product"><strong>{group.quantity} × {group.item.productName}{group.sizes ? ` · Sizes: ${group.sizes}` : ""}</strong><span>{formatPrice(group.total)}</span></div>
         <div className="order-assets">
-          {group.assets.length ? group.assets.map(({ asset, itemIndex }) => <OrderAssetTile key={`${asset.kind}-${asset.fileName}`} order={order} itemIndex={itemIndex} asset={asset} onDeleted={refresh} />) : <div className="order-no-assets"><FileImage /><span>{group.item.designId ? "No files available for this item" : "Without personalisation · No artwork required"}</span></div>}
+          {group.assets.length ? group.assets.map(({ asset, itemIndex }) => <OrderAssetTile key={`${asset.kind}-${asset.fileName}`} order={order} itemIndex={itemIndex} asset={asset} onDeleted={refresh} />) : <div className="order-no-assets"><FileImage /><span>{group.item.designId ? "No files available for this item" : "Customization required · No artwork required"}</span></div>}
         </div>
       </div>)}
       <footer><span>Order total</span><strong>{formatPrice(order.subtotal)}</strong></footer>

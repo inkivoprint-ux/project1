@@ -1,6 +1,7 @@
 "use client";
 
 import { printPrice } from "@/lib/printPricing";
+import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, CircleAlert, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useId, useState } from "react";
@@ -56,6 +57,7 @@ export function CartDrawer({ open, cart, products, onClose, onQuantity, onRemove
   const submitOrder = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (submitting) return;
+    if (cart.some((entry) => !entry.designId)) { setError("Customize every product before checkout. Remove or customize old items without a saved design."); return; }
     setSubmitting(true);
     setError("");
     try {
@@ -84,7 +86,8 @@ export function CartDrawer({ open, cart, products, onClose, onQuantity, onRemove
           {lines.map(({ product, quantity, designId, size }) => <article className="cart-line" key={cartEntryKey({ productId: product.id, designId, size })}>
             <div className="cart-line-image"><Image src={product.image} alt="" width={90} height={110} unoptimized={product.image.startsWith("data:")} /></div>
             <div className="cart-line-copy"><small>{product.category}</small><h3>{product.name}</h3><span>{product.finish}</span><strong>{formatPrice(printPrice(product, designConfigurations[designId ?? ""]) * quantity)}</strong>
-              <span className="cart-design-label">{designId ? `Personalised design · ${designId.slice(-8)}` : "Without personalisation"}</span>
+              {!designId && <Link href={`/customize/${product.slug}?quantity=${quantity}`}>Customize this product before checkout</Link>}
+              <span className="cart-design-label">{designId ? `Customized design · ${designId.slice(-8)}` : "Customization required"}</span>
               {isTShirtCategory(product.category) && <label className="cart-size-field"><span>{size ? `Size ${size}` : "Choose T-shirt size"}</span><select required disabled={submitting} aria-label={`Size for ${product.name}${size ? `, current ${size}` : ""}${designId ? `, design ${designId.slice(-8)}` : ""}`} value={size ?? ""} onChange={(event) => { try { onSize(product.id, event.target.value as TShirtSize, designId, size); setError(""); } catch (failure) { setError(failure instanceof Error ? failure.message : "The size could not be updated."); } }}><option value="" disabled>Select size</option>{T_SHIRT_SIZES.map((option) => <option value={option} key={option} disabled={product.sizeStock?.[option] === 0}>{option}{product.sizeStock?.[option] === 0 ? " · Out of stock" : ""}</option>)}</select></label>}
               {designId && designFiles[designId]?.length > 0 && <details className="checkout-design-files"><summary>Prepared order files ({designFiles[designId].length})</summary><ul>{designFiles[designId].map((fileName) => <li key={fileName}>{fileName}</li>)}</ul></details>}
               <div className="cart-line-actions"><div><button disabled={submitting || (directPurchase && quantity <= 1)} onClick={() => onQuantity(product.id, quantity - 1, designId, size)} aria-label={`Decrease ${product.name}${size ? ` size ${size}` : ""} quantity`}><Minus /></button><span>{quantity}</span><button disabled={submitting || quantity >= 99} onClick={() => onQuantity(product.id, quantity + 1, designId, size)} aria-label={`Increase ${product.name}${size ? ` size ${size}` : ""} quantity`}><Plus /></button></div>{(!directPurchase || lines.length > 1) && <button disabled={submitting} onClick={() => onRemove(product.id, designId, size)} aria-label={`Remove ${product.name}${size ? ` size ${size}` : ""}${designId ? " design" : ""}`}><Trash2 /> Remove</button>}</div>
@@ -98,7 +101,7 @@ export function CartDrawer({ open, cart, products, onClose, onQuantity, onRemove
             <label><span>WhatsApp number</span><input required type="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" /></label>
             <label><span>Delivery address</span><textarea required maxLength={2000} value={address} onChange={(event) => setAddress(event.target.value)} autoComplete="street-address" /></label>
             {submitting && <p className="checkout-saving-message" role="status" aria-live="polite">Please wait a moment while we save your order and artwork files. Your order number will appear when everything is ready.</p>}
-            <button type="submit" disabled={submitting}>{submitting ? "Saving… Please wait" : <>Save order & continue to WhatsApp <ArrowRight /></>}</button>
+            <button type="submit" disabled={submitting || cart.some((entry) => !entry.designId)}>{submitting ? "Saving… Please wait" : <>Save order & continue to WhatsApp <ArrowRight /></>}</button>
           </form> : <button className="cart-whatsapp-button" onClick={() => setCheckoutOpen(true)}>Order on WhatsApp <ArrowRight /></button>}
           <button onClick={onClose}>Continue shopping</button></footer>
       </> : <div className="cart-empty"><ShoppingBag /><h3>Your cart is empty</h3><p>Add a product and it will appear here.</p><button onClick={onClose}>Continue shopping</button></div>}

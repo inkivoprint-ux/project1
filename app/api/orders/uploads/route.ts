@@ -13,6 +13,7 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
     const input = z.object({ payload: z.unknown(), files: z.array(z.object({ key: z.string(), size: z.number().int().min(1).max(20 * 1024 * 1024) })).min(1).max(990) }).parse(await readLimitedJson(request, 1_000_000));
     const payload = parseOrderPayload(input.payload);
+    if (payload.items.some((item) => !item.designId || !item.assets.some((asset) => asset.kind === "edited") || !item.assets.some((asset) => asset.kind === "preview"))) throw new Error("Every product requires a saved customization before ordering.");
     if (!payload.idempotencyKey) throw new Error("Refresh this checkout.");
     if (payload.salesChannel === "offline") {
       const session = await getAdminSession();
