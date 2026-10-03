@@ -14,6 +14,9 @@ import type { TShirtSize } from "@/lib/productSizes";
 
 export function OfflineCounter() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [productSearch, setProductSearch] = useState("");
+  const searchTerms = productSearch.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const matchingProducts = products.filter((product) => isProductAvailable(product) && searchTerms.every((term) => `${product.name} ${product.shortName}`.toLocaleLowerCase().includes(term)));
   const [lines, setLines] = useState<Array<{ slug: string; quantity: number; size: string; designId?: string }>>([{ slug: "", quantity: 1, size: "" }]);
   const [editing, setEditing] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState("Walk-in customer");
@@ -43,8 +46,12 @@ export function OfflineCounter() {
       <label>Customer name<input required maxLength={160} value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></label>
       <label>Phone (optional)<input type="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
       <label>Address / note (optional)<input maxLength={2000} value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label>Search products by name<input type="search" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} placeholder="Search T-shirt, bottle, mug…" /></label>
+        {productSearch.trim() && <small role="status">{matchingProducts.length ? `${matchingProducts.length} matching products` : "No products found. Try another name."} Selected items stay in your order.</small>}
+      </div>
       {lines.map((line, index) => { const product = products.find((entry) => entry.slug === line.slug); const update = (patch: Partial<typeof line>) => setLines((current) => current.map((entry, slot) => slot === index ? { ...entry, ...patch } : entry)); return <div className="counter-line" key={index}>
-        <label>Product<select required value={line.slug} onChange={(event) => update({ slug: event.target.value, size: "", designId: undefined })}><option value="">Choose product</option>{products.filter(isProductAvailable).map((entry) => <option key={entry.id} value={entry.slug}>{entry.name} · {formatPrice(entry.price)}{entry.stockQuantity == null ? "" : ` · ${entry.stockQuantity} in stock`}</option>)}</select></label>
+        <label>Product<select required value={line.slug} onChange={(event) => update({ slug: event.target.value, size: "", designId: undefined })}><option value="">Choose product</option>{products.filter((entry) => matchingProducts.some((match) => match.id === entry.id) || entry.slug === line.slug).map((entry) => <option key={entry.id} value={entry.slug}>{entry.name} · {formatPrice(entry.price)}{entry.stockQuantity == null ? "" : ` · ${entry.stockQuantity} in stock`}</option>)}</select></label>
         {product && <div><button type="button" onClick={() => setEditing(index)}>{line.designId ? "Replace customization" : "Customize product"}</button>{line.designId && <><small>Design saved, including selected sides.</small></>}</div>}
         {product && isTShirtCategory(product.category) && <label>Size<select required value={line.size} onChange={(event) => update({ size: event.target.value })}><option value="">Choose size</option>{T_SHIRT_SIZES.map((size) => <option key={size} value={size} disabled={product.sizeStock?.[size] === 0}>{size}{product.sizeStock ? ` · ${product.sizeStock[size]} in stock` : ""}</option>)}</select></label>}
         <label>Quantity<input required type="number" min="1" max="99" step="1" value={line.quantity} onChange={(event) => update({ quantity: Number(event.target.value) })} /></label>
